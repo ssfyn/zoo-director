@@ -1,0 +1,37 @@
+# Swift Package Manager 构建产物与本地工作区
+.build/
+.swiftpm/
+
+# Xcode 本地状态及测试结果，保留可共享的项目配置
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.xcresult/
+
+# 本机构建、签名与分发产物
+/build/
+/dist/
+*.app/
+*.dSYM/
+*.ipa
+*.dmg
+*.pkg
+
+# macOS 与编辑器临时文件
+.DS_Store
+._*
+.Spotlight-V100/
+.Trashes/
+*.swp
+*.swo
+*~
+
+# 本地日志和环境配置，保留可共享的配置示例
+*.log
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
