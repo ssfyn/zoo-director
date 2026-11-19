@@ -205,14 +205,18 @@ final class BrowserModel {
     private var watchProblem: String?
     /// 服务端能力识别后的实际监听模式。
     private var watchModeStatus = "实时监听中"
+    /// 密码独立于连接配置存储，测试可以替换为内存实现。
+    private let passwordStore: any DigestPasswordStore
     /// 可替换的连接工厂，用于验证外部变化与异常网络行为。
     private let serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)?
 
     /// 只恢复本机保存的真实连接，启动时不选中或连接任何服务。
     init(defaults: UserDefaults = .standard,
-         serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)? = nil) {
+         serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)? = nil,
+         passwordStore: any DigestPasswordStore = KeychainDigestPasswordStore()) {
         self.defaults = defaults
         self.serviceFactory = serviceFactory
+        self.passwordStore = passwordStore
         PreferencesMigration.migrate(into: defaults)
         let saved = defaults.data(forKey: "zoodirector.connections")
         let decoded = saved.flatMap { try? JSONDecoder().decode([ConnectionProfile].self, from: $0) } ?? []
@@ -324,29 +328,62 @@ final class BrowserModel {
 
     /// 添加并选中新配置，仅保存到本机，等待用户显式连接。
     @discardableResult
-    func addConnection(name: String, endpoint: String, ssh: SSHConfiguration? = nil) -> ConnectionProfile? {
+    func addConnection(name: String, endpoint: String, ssh: SSHConfiguration? = nil,
+                       digest: DigestConfiguration? = nil, password: String? = nil) -> ConnectionProfile? {
         guard mayLeave() else { return nil }
-        let profile = ConnectionProfile(name: name, endpoint: endpoint, ssh: ssh)
-        profiles.append(profile)
-        persistConnections()
-        selectedConnectionID = profile.id
-        return profile
+        error = nil
+        do {
+            let authentication = try prepareDigest(digest, password: password)
+            let profile = ConnectionProfile(name: name, endpoint: endpoint, ssh: ssh, digest: authentication)
+            profiles.append(profile)
+            persistConnections()
+            selectedConnectionID = profile.id
+            return profile
+        } catch { self.error = error.localizedDescription; return nil }
     }
 
-    /// 更新配置并保留标识与收藏；地址或隧道变化时关闭旧会话，等待手动连接。
+    /// 更新配置保留标识与收藏，地址、隧道或认证变化时关闭旧会话。
     @discardableResult
-    func updateConnection(_ profile: ConnectionProfile, name: String, endpoint: String, ssh: SSHConfiguration? = nil) -> Bool {
+    func updateConnection(_ profile: ConnectionProfile, name: String, endpoint: String, ssh: SSHConfiguration? = nil,
+                          digest: DigestConfiguration? = nil, password: String? = nil) -> Bool {
         guard !saving, let index = profiles.firstIndex(where: { $0.id == profile.id }),
               !profiles[index].isDemo else { return false }
         let isActive = activeID == profile.id
         guard !isActive || mayLeave() else { return false }
-        let addressChanged = profiles[index].endpoint != endpoint || profiles[index].ssh != ssh
-        if isActive && addressChanged { disconnect() }
-        profiles[index].name = name
-        profiles[index].endpoint = endpoint
-        profiles[index].ssh = ssh
-        persistConnections()
-        return true
+        error = nil
+        do {
+            let authentication = try prepareDigest(digest, password: password)
+            let previous = profiles[index]
+            let changed = previous.endpoint != endpoint || previous.ssh != ssh || previous.digest != authentication
+            if isActive && changed { disconnect() }
+            profiles[index].name = name
+            profiles[index].endpoint = endpoint
+            profiles[index].ssh = ssh
+            profiles[index].digest = authentication
+            persistConnections()
+            if previous.digest?.credentialID != authentication?.credentialID { removeDigestPassword(previous.digest) }
+            return true
+        } catch { self.error = error.localizedDescription; return false }
+    }
+
+    /// 先保存新引用的密码；失败时不修改原配置，未改密码时要求原引用仍可用。
+    private func prepareDigest(_ configuration: DigestConfiguration?, password: String?) throws -> DigestConfiguration? {
+        guard var configuration else { return nil }
+        try configuration.validate()
+        if let password {
+            configuration.credentialID = UUID()
+            try passwordStore.save(password, id: configuration.credentialID)
+        } else if try passwordStore.load(configuration.credentialID) == nil {
+            throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。")
+        }
+        return configuration
+    }
+
+    /// 配置已提交后清理旧凭据，失败时提示但不回滚已经保存的新配置。
+    private func removeDigestPassword(_ configuration: DigestConfiguration?) {
+        guard let configuration else { return }
+        do { try passwordStore.remove(configuration.credentialID) }
+        catch { self.error = "配置已保存，但旧 digest 密码未能从钥匙串移除。" }
     }
 
     /// 删除连接及收藏，删除当前会话前先关闭连接，不自动连接其他服务。
@@ -355,6 +392,10 @@ final class BrowserModel {
         if activeID == current.id {
             guard mayLeave() else { return }
             disconnect()
+        }
+        if let digest = current.digest {
+            do { try passwordStore.remove(digest.credentialID) }
+            catch { self.error = error.localizedDescription; return }
         }
         profiles.removeAll { $0.id == current.id }
         if selectedConnectionID == current.id { selectedConnectionID = nil }
@@ -426,7 +467,7 @@ final class BrowserModel {
                 try Task.checkCancellation()
                 let connected: any ZooKeeperService
                 if let serviceFactory { connected = try await serviceFactory(profile) }
-                else { connected = try await ZooKeeperClient.open(profile: profile) }
+                else { connected = try await ZooKeeperClient.open(profile: profile, passwordStore: passwordStore) }
                 guard token == connectionGeneration, !Task.isCancelled else { await connected.close(); return }
                 service = connected
                 connectionEstablished = true; connecting = false

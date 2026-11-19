@@ -9,14 +9,14 @@ enum NativeMenuLocalization {
     private static var refreshing = false
     /// 系统菜单通过稳定的动作选择器识别，避免依赖用户的系统显示语言。
     private static let actionTitles = [
-        "orderFrontStandardAboutPanel:": "关于 Zoo Director",
-        "hide:": "隐藏 Zoo Director", "hideOtherApplications:": "隐藏其他应用",
-        "unhideAllApplications:": "显示全部", "terminate:": "退出 Zoo Director",
+        "orderFrontStandardAboutPanel:": "关于 ZooDirector",
+        "hide:": "隐藏 ZooDirector", "hideOtherApplications:": "隐藏其他应用",
+        "unhideAllApplications:": "显示全部", "terminate:": "退出 ZooDirector",
         "performClose:": "关闭窗口", "performMiniaturize:": "最小化",
         "performZoom:": "缩放", "toggleFullScreen:": "进入全屏幕",
         "arrangeInFront:": "前置全部窗口", "undo:": "撤销", "redo:": "重做",
         "cut:": "剪切", "copy:": "复制", "paste:": "粘贴", "selectAll:": "全选",
-        "pasteAsPlainText:": "粘贴并匹配样式", "showHelp:": "Zoo Director 帮助"
+        "pasteAsPlainText:": "粘贴并匹配样式", "showHelp:": "ZooDirector 帮助"
     ]
     /// 没有动作的菜单容器以系统英文或中文标题识别。
     private static let containerTitles = [

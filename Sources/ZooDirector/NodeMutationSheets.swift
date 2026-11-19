@@ -27,7 +27,7 @@ struct CreateNodeSheet: View {
             Text(L10n.text("初始内容（可留空）"))
             TextEditor(text: $text).font(.system(.body, design: .monospaced))
                 .frame(height: 160).border(.separator)
-            Text(L10n.text("权限：world:anyone，可读写。")) .font(.caption).foregroundStyle(.secondary)
+            Text(L10n.text(model.selectedProfile?.digest == nil ? "权限：world:anyone，可读写。" : "权限：当前 digest 身份，可读写。")) .font(.caption).foregroundStyle(.secondary)
             HStack {
                 if model.saving { ProgressView().controlSize(.small) }
                 Spacer()

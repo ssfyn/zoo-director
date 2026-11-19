@@ -22,10 +22,11 @@ actor ZooKeeperMutationPeer {
     }
 
     /// 创建开放权限的持久测试节点，只在测试专属目录内调用。
-    func create(_ path: String, text: String = "") async throws {
+    func create(_ path: String, text: String = "", digestIdentity: String? = nil) async throws {
         var body = JuteWriter()
         body.string(path); body.buffer(Data(text.utf8))
-        body.integer(Int32(1)); body.integer(Int32(31)); body.string("world"); body.string("anyone")
+        body.integer(Int32(1)); body.integer(Int32(31))
+        body.string(digestIdentity == nil ? "world" : "digest"); body.string(digestIdentity ?? "anyone")
         body.integer(Int32(0))
         try await request(1, body)
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Zoo Director 的原生 macOS 应用入口。
+/// ZooDirector 的原生 macOS 应用入口。
 @main
 struct ZooDirectorApp: App {
     /// 退出时保护未保存内容的应用代理。
@@ -16,7 +16,7 @@ struct ZooDirectorApp: App {
 
     /// 组装窗口、菜单与快捷键。
     var body: some Scene {
-        Window("Zoo Director", id: "browser") {
+        Window("ZooDirector", id: "browser") {
             BrowserView(model: model, workspace: workspace)
                 .environment(\.locale, language.locale)
                 .frame(minWidth: 1080, minHeight: 640)

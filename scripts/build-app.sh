@@ -7,7 +7,12 @@ export CLANG_MODULE_CACHE_PATH="$PWD/.build/clang-cache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$PWD/.build/swift-cache"
 swift build -c "$configuration" --disable-sandbox
 binary_dir="$(swift build -c "$configuration" --show-bin-path --disable-sandbox)"
-app_dir="$PWD/.build/Zoo Director.app"
+app_dir="$PWD/.build/ZooDirector.app"
+# 首次去除名称中的空格时迁移已有应用，后续始终更新同一个应用包。
+previous_app_dir="$PWD/.build/Zoo Director.app"
+if [[ ! -e "$app_dir" && -d "$previous_app_dir" ]]; then
+    mv "$previous_app_dir" "$app_dir"
+fi
 mkdir -p "$app_dir/Contents/MacOS"
 mkdir -p "$app_dir/Contents/Resources"
 cp "$binary_dir/ZooDirector" "$app_dir/Contents/MacOS/ZooDirector"
@@ -19,9 +24,9 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleExecutable</key><string>ZooDirector</string>
-<key>CFBundleIdentifier</key><string>app.zoodirector.zookeeper</string>
-<key>CFBundleName</key><string>Zoo Director</string>
-<key>CFBundleDisplayName</key><string>Zoo Director</string>
+<key>CFBundleIdentifier</key><string>fan.yanan.zoodirector</string>
+<key>CFBundleName</key><string>ZooDirector</string>
+<key>CFBundleDisplayName</key><string>ZooDirector</string>
 <key>CFBundleIconFile</key><string>ZooDirector.icns</string>
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>

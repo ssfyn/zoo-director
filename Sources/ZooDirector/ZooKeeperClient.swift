@@ -4,6 +4,8 @@ import Foundation
 actor ZooKeeperClient: ZooKeeperService {
     /// 负责二进制帧传输的网络对象。
     private let transport: ZooKeeperTransport
+    /// 已完成 digest 身份注册时，新节点默认限定为该身份可访问。
+    private var authenticatedDigest = false
     /// 实际 TCP 地址，SSH 模式下为本机转发地址。
     private let endpoint: String
     /// 当前会话独占的 SSH 隧道，直连时为空。
@@ -43,9 +45,11 @@ actor ZooKeeperClient: ZooKeeperService {
     }
 
     /// 按配置建立可选的 SSH 隧道与会话，失败或取消时回收全部资源。
-    static func open(profile: ConnectionProfile) async throws -> ZooKeeperClient {
+    static func open(profile: ConnectionProfile, password: String? = nil,
+                     passwordStore: any DigestPasswordStore = KeychainDigestPasswordStore()) async throws -> ZooKeeperClient {
         var tunnel: SSHTunnel?
         do {
+            let credential = try digestPassword(profile: profile, override: password, store: passwordStore)
             var endpoint = profile.endpoint
             if let configuration = profile.ssh {
                 let forwarding = try await SSHTunnel()
@@ -55,7 +59,7 @@ actor ZooKeeperClient: ZooKeeperService {
             try Task.checkCancellation()
             let client = try ZooKeeperClient(endpoint: endpoint, tunnel: tunnel)
             do {
-                try await client.connect()
+                try await client.connect(digest: profile.digest, password: credential)
                 try Task.checkCancellation()
                 return client
             } catch {
@@ -69,7 +73,7 @@ actor ZooKeeperClient: ZooKeeperService {
     }
 
     /// 完成会话握手，随后启动接收与心跳循环。
-    func connect() async throws {
+    func connect(digest: DigestConfiguration? = nil, password: String? = nil) async throws {
         do {
             try await transport.start()
             var packet = JuteWriter()
@@ -86,6 +90,13 @@ actor ZooKeeperClient: ZooKeeperService {
             let session = try reply.integer(Int64.self)
             _ = try reply.buffer()
             guard timeout > 0, session != 0 else { throw ZooKeeperError.server(-112) }
+            if let digest {
+                try digest.validate()
+                guard let password else { throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。") }
+                try await authenticateDigest(username: digest.username, password: password)
+                authenticatedDigest = true
+            }
+            try Task.checkCancellation()
             readerTask = Task { [weak self] in await self?.receiveLoop() }
             heartbeatTask = Task { [weak self] in
                 await self?.heartbeat(every: min(5, max(0.2, Double(timeout) / 3_000)))
@@ -96,6 +107,33 @@ actor ZooKeeperClient: ZooKeeperService {
             fail(error)
             throw error
         }
+    }
+
+    /// 在创建网络连接前读取密码，草稿测试可临时覆盖但不保存。
+    private static func digestPassword(profile: ConnectionProfile, override: String?, store: any DigestPasswordStore) throws -> String? {
+        guard let digest = profile.digest else { return nil }
+        try digest.validate()
+        if let override { return override }
+        guard let saved = try store.load(digest.credentialID) else {
+            throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。")
+        }
+        return saved
+    }
+
+    /// 握手后独占读取认证响应；认证完成前不启动普通请求、心跳或监听。
+    private func authenticateDigest(username: String, password: String) async throws {
+        let auth = Data("\(username):\(password)".utf8)
+        guard auth.count <= 1_000_000 else { throw ZooKeeperError.message("digest 认证信息过长。") }
+        var packet = JuteWriter()
+        packet.integer(Int32(-4)); packet.integer(Int32(100))
+        packet.integer(Int32(0)); packet.string("digest"); packet.buffer(auth)
+        try await transport.send(packet.framed())
+        var reply = JuteReader(data: try await transport.frame())
+        let xid = try reply.integer(Int32.self)
+        _ = try reply.integer(Int64.self)
+        let code = try reply.integer(Int32.self)
+        guard xid == -4 else { throw ZooKeeperError.message("digest 认证响应无效，连接已关闭。") }
+        guard code == 0 else { throw ZooKeeperError.server(code) }
     }
 
     /// 读取当前层的节点名，不逐个请求子节点元信息。
@@ -151,7 +189,7 @@ actor ZooKeeperClient: ZooKeeperService {
         var body = JuteWriter()
         body.string(path); body.buffer(data)
         body.integer(Int32(1)); body.integer(Int32(31))
-        body.string("world"); body.string("anyone")
+        body.string(authenticatedDigest ? "auth" : "world"); body.string(authenticatedDigest ? "" : "anyone")
         body.integer(Int32(ephemeral ? 1 : 0))
         _ = try await request(op: 1, body: body)
     }

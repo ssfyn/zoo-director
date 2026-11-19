@@ -47,4 +47,29 @@ final class PreferencesMigrationTests: XCTestCase {
         XCTAssertEqual(defaults.data(forKey: "zoodirector.connections"), local)
         XCTAssertEqual(defaults.data(forKey: "canopy.connections"), local)
     }
+
+    /// 上一版应用域的连接、收藏和语言优先于更早的配置，迁移后可以正常恢复。
+    func testPreviousBundleDomainPreservesAllPreferences() throws {
+        let suite = "ZooDirector.BundleMigration.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let profile = ConnectionProfile(name: "上一版连接", endpoint: "localhost:2181")
+        let connections = try JSONEncoder().encode([profile])
+        let favorites = try JSONEncoder().encode([profile.id.uuidString: ["/services"]])
+        let previous: [String: Any] = ["zoodirector.connections": connections,
+            "zoodirector.favorites": favorites, "zoodirector.language": "simplifiedChinese"]
+        PreferencesMigration.migrate(into: defaults, legacyDomain: ["canopy.connections": Data()], previousDomain: previous)
+        let model = BrowserModel(defaults: defaults)
+        XCTAssertEqual(model.profiles, [profile])
+        model.activeID = profile.id
+        XCTAssertEqual(model.favorites, ["/services"])
+        XCTAssertEqual(LanguagePreferences(defaults: defaults).selection, .simplifiedChinese)
+        let empty = try JSONEncoder().encode([ConnectionProfile]())
+        defaults.set(empty, forKey: "zoodirector.connections")
+        defaults.set("english", forKey: "zoodirector.language")
+        PreferencesMigration.migrate(into: defaults, previousDomain: previous)
+        XCTAssertEqual(defaults.data(forKey: "zoodirector.connections"), empty)
+        XCTAssertEqual(LanguagePreferences(defaults: defaults).selection, .english)
+    }
+
 }

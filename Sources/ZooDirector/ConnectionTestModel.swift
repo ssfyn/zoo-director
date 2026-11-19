@@ -15,26 +15,27 @@ final class ConnectionTestModel {
     /// 阻止被取消的测试覆盖新表单或新测试的结果。
     private var generation = UUID()
     /// 可替换工厂，正式环境执行完整 ZooKeeper 会话握手。
-    private let factory: @Sendable (ConnectionProfile) async throws -> any ZooKeeperService
+    private let factory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)?
 
     /// 默认使用独立的 ZooKeeper 客户端，测试时可注入受控握手。
-    init(factory: @escaping @Sendable (ConnectionProfile) async throws -> any ZooKeeperService = {
-        try await ZooKeeperClient.open(profile: $0)
-    }) { self.factory = factory }
+    init(factory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)? = nil) { self.factory = factory }
 
     /// 测试当前输入的参数，成功、失败或取消都不留下临时会话。
-    func start(_ profile: ConnectionProfile) {
+    func start(_ profile: ConnectionProfile, password: String? = nil) {
         cancel()
         let token = generation
         running = true
         task = Task {
             do {
                 try Task.checkCancellation()
-                let service = try await factory(profile)
+                let service: any ZooKeeperService
+                if let factory { service = try await factory(profile) }
+                else { service = try await ZooKeeperClient.open(profile: profile, password: password) }
                 await service.close()
                 guard token == generation, !Task.isCancelled else { return }
                 running = false; succeeded = true
-                message = "连接成功，已完成 ZooKeeper 会话握手。"
+                message = profile.digest == nil ? "连接成功，已完成 ZooKeeper 会话握手。"
+                    : "连接成功，已提交 digest 身份；节点权限由对应 ACL 决定。"
             } catch {
                 guard token == generation, !Task.isCancelled else { return }
                 running = false; succeeded = false

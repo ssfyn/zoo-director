@@ -1,6 +1,6 @@
 import Foundation
 
-/// 连接配置，不保存认证凭据。
+/// 连接配置只保存认证元信息，密码由系统钥匙串管理。
 struct ConnectionProfile: Identifiable, Codable, Hashable, Sendable {
     /// 配置的稳定标识。
     var id = UUID()
@@ -12,6 +12,8 @@ struct ConnectionProfile: Identifiable, Codable, Hashable, Sendable {
     var isDemo = false
     /// 可选的 SSH 隧道配置，旧版本保存的连接默认直连。
     var ssh: SSHConfiguration?
+    /// 可选的 digest 用户名与密码引用，旧连接默认不启用。
+    var digest: DigestConfiguration?
 
     /// 名称留空时以服务器地址显示，避免侧栏、加载页和删除确认出现空标题。
     var displayName: String {
@@ -88,11 +90,12 @@ enum ZooKeeperError: LocalizedError {
         switch self {
         case .message(let message): return message
         case .server(-101): return "节点不存在，请刷新父节点。"
-        case .server(-102): return "没有访问权限。首版尚未支持认证。"
+        case .server(-102): return "没有节点访问权限，请检查 digest 用户名、密码及节点 ACL。"
         case .server(-103): return "数据已被其他客户端修改。请重新读取后再编辑。"
         case .server(-108): return "临时节点不能包含子节点。"
         case .server(-110): return "节点已存在，请使用其他名称。"
         case .server(-111): return "节点包含子节点，请勾选同时删除所有子节点。"
+        case .server(-115): return "digest 认证失败，请检查认证配置。"
         case .server(-112): return "会话已过期，请重新连接。"
         case .server(let code): return "ZooKeeper 返回错误：\(code)"
         }

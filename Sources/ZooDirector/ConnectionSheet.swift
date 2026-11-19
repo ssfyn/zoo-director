@@ -25,6 +25,14 @@ struct ConnectionSheet: View {
     @State private var useSSH = false
     /// 用户输入的 SSH 连接与认证配置。
     @State private var ssh = SSHConfiguration()
+    /// 是否为此连接提交 digest 身份。
+    @State private var useDigest = false
+    /// 用户名与钥匙串引用，不包含密码。
+    @State private var digest = DigestConfiguration(username: "")
+    /// 本次输入的密码仅驻留表单内存，不读取已保存密码到界面。
+    @State private var password = ""
+    /// 区分保留已有密码与用户显式输入新密码（包括空密码）。
+    @State private var passwordChanged = false
     /// 表单校验错误。
     @State private var validation: String?
 
@@ -38,6 +46,8 @@ struct ConnectionSheet: View {
         _endpoint = State(initialValue: profile?.endpoint ?? "localhost:2181")
         _useSSH = State(initialValue: profile?.ssh != nil)
         _ssh = State(initialValue: profile?.ssh ?? SSHConfiguration())
+        _useDigest = State(initialValue: profile?.digest != nil)
+        _digest = State(initialValue: profile?.digest ?? DigestConfiguration(username: ""))
     }
 
     /// 显示真实连接的范围说明与地址输入。
@@ -48,9 +58,11 @@ struct ConnectionSheet: View {
                 TextField(L10n.text("名称（可选）"), text: $name)
                 TextField(useSSH ? L10n.text("ZooKeeper 地址（从 SSH 主机访问）") : L10n.text("服务器"), text: $endpoint)
             }
+            Toggle(L10n.text("使用 digest 认证"), isOn: $useDigest)
+            if useDigest { digestForm }
             Toggle(L10n.text("使用 SSH 隧道"), isOn: $useSSH)
             if useSSH { sshForm }
-            Text(L10n.text("支持单服务器 TCP、读取与版本校验写入。暂不支持 ZooKeeper digest / SASL、TLS、集群故障切换与自动重连。"))
+            Text(L10n.text("支持单服务器 TCP、digest 认证与版本校验写入。暂不支持 SASL、TLS、集群故障切换与自动重连。"))
                 .font(.caption).foregroundStyle(.secondary)
             if let validation { Text(L10n.text(validation)).font(.caption).foregroundStyle(.red) }
             if let message = connectionTest.message {
@@ -72,6 +84,7 @@ struct ConnectionSheet: View {
         }.padding(28).frame(width: 520)
         .onDisappear { connectionTest.cancel() }
         .onChange(of: draft) { _, _ in connectionTest.cancel() }
+        .onChange(of: password) { _, _ in connectionTest.cancel() }
     }
 
     /// 写入期间或当前节点未保存时不能提交配置。
@@ -83,7 +96,8 @@ struct ConnectionSheet: View {
     /// 草稿保留尚未保存的表单输入，测试不会读取旧的持久化配置。
     private var draft: ConnectionProfile {
         ConnectionProfile(id: profile?.id ?? draftID, name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                          endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines), ssh: useSSH ? ssh : nil)
+                          endpoint: endpoint.trimmingCharacters(in: .whitespacesAndNewlines), ssh: useSSH ? ssh : nil,
+                          digest: useDigest ? digest : nil)
     }
 
     /// 校验并返回同一份草稿，保存、连接与测试采用相同的地址规则。
@@ -91,6 +105,7 @@ struct ConnectionSheet: View {
         let profile = draft
         _ = try ServerAddress(endpoint: profile.endpoint)
         try profile.ssh?.validate()
+        try profile.digest?.validate()
         return profile
     }
 
@@ -104,9 +119,28 @@ struct ConnectionSheet: View {
                 do {
                     let profile = try validatedDraft()
                     validation = nil
-                    connectionTest.start(profile)
+                    connectionTest.start(profile, password: passwordOverride)
                 } catch { validation = error.localizedDescription }
             }
+        }
+    }
+
+    /// 有旧引用且未改密码时使用钥匙串，新建和修改密码则传递表单原文。
+    private var passwordOverride: String? {
+        useDigest && (passwordChanged || profile?.digest == nil) ? password : nil
+    }
+
+    /// 认证输入仅提交身份，权限由 ACL 决定，并明确密码的保存位置。
+    private var digestForm: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Form {
+                TextField(L10n.text("digest 用户名"), text: $digest.username)
+                SecureField(L10n.text(profile?.digest == nil ? "digest 密码" : "digest 密码（未修改时保留已保存密码）"), text: Binding(
+                    get: { password }, set: { if password != $0 { password = $0; passwordChanged = true } }
+                ))
+            }
+            Text(L10n.text("密码保存在 macOS 钥匙串。digest 不加密传输，建议配合 SSH 隧道。节点权限由 ACL 决定。"))
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -148,17 +182,29 @@ struct ConnectionSheet: View {
             if let profile {
                 let success: Bool
                 if let workspace {
-                    success = workspace.update(profile, name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh)
+                    success = workspace.update(profile, name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh,
+                        digest: draft.digest, password: passwordOverride)
                     saved = workspace.configuration.profiles.first { $0.id == profile.id }
                 } else {
-                    success = model.updateConnection(profile, name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh)
+                    success = model.updateConnection(profile, name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh,
+                        digest: draft.digest, password: passwordOverride)
                     saved = model.profiles.first { $0.id == profile.id }
                 }
-                guard success else { return }
+                guard success else {
+                    validation = workspace?.configuration.error ?? model.error
+                    return
+                }
             } else {
                 guard !submissionBlocked else { return }
-                saved = model.addConnection(name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh)
-                if let saved { workspace?.select(saved) }
+                saved = model.addConnection(name: draft.name, endpoint: draft.endpoint, ssh: draft.ssh,
+                        digest: draft.digest, password: passwordOverride)
+                guard let saved else { validation = model.error; return }
+                workspace?.select(saved)
+            }
+            if let saved {
+                digest = saved.digest ?? DigestConfiguration(username: "")
+                password = ""
+                passwordChanged = false
             }
             if connectAfterSaving, let saved {
                 if let workspace { workspace.connect(saved) } else { model.connect(saved) }

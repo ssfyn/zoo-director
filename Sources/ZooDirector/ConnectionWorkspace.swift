@@ -12,15 +12,19 @@ final class ConnectionWorkspace {
     private let defaults: UserDefaults
     /// 测试可替换的连接工厂，每次建立会话都创建独立服务。
     private let serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)?
+    /// 所有配置与会话共享同一密码存储。
+    private let passwordStore: any DigestPasswordStore
     /// 操作未选中的会话失败时显示的窗口级错误。
     var error: String?
 
     /// 启动时选中首个已保存配置，仅展示配置页，不创建网络会话。
     init(defaults: UserDefaults = .standard,
-         serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)? = nil) {
+         serviceFactory: (@Sendable (ConnectionProfile) async throws -> any ZooKeeperService)? = nil,
+         passwordStore: any DigestPasswordStore = KeychainDigestPasswordStore()) {
         self.defaults = defaults
         self.serviceFactory = serviceFactory
-        configuration = BrowserModel(defaults: defaults)
+        self.passwordStore = passwordStore
+        configuration = BrowserModel(defaults: defaults, passwordStore: passwordStore)
         if let first = configuration.profiles.first { select(first) }
     }
 
@@ -42,7 +46,7 @@ final class ConnectionWorkspace {
     func select(_ profile: ConnectionProfile) {
         guard configuration.profiles.contains(where: { $0.id == profile.id }) else { return }
         if sessions[profile.id] == nil {
-            let model = BrowserModel(defaults: defaults, serviceFactory: serviceFactory)
+            let model = BrowserModel(defaults: defaults, serviceFactory: serviceFactory, passwordStore: passwordStore)
             model.profiles = [profile]
             model.selectConnection(profile)
             sessions[profile.id] = model
@@ -65,13 +69,20 @@ final class ConnectionWorkspace {
 
     /// 修改配置前保护目标会话，地址变化时只关闭该会话，不影响其他连接。
     @discardableResult
-    func update(_ profile: ConnectionProfile, name: String, endpoint: String, ssh: SSHConfiguration?) -> Bool {
+    func update(_ profile: ConnectionProfile, name: String, endpoint: String, ssh: SSHConfiguration?,
+                digest: DigestConfiguration? = nil, password: String? = nil) -> Bool {
         let model = sessions[profile.id]
         guard model?.mayLeave() != false else { error = model?.error; return false }
         guard let original = configuration.profiles.first(where: { $0.id == profile.id }) else { return false }
-        if original.endpoint != endpoint || original.ssh != ssh { model?.disconnect() }
-        guard configuration.updateConnection(profile, name: name, endpoint: endpoint, ssh: ssh) else { return false }
-        if let updated = configuration.profiles.first(where: { $0.id == profile.id }) { model?.profiles = [updated] }
+        error = nil
+        guard configuration.updateConnection(profile, name: name, endpoint: endpoint, ssh: ssh, digest: digest, password: password) else {
+            error = configuration.error
+            return false
+        }
+        if let updated = configuration.profiles.first(where: { $0.id == profile.id }) {
+            if original.endpoint != endpoint || original.ssh != ssh || original.digest != updated.digest { model?.disconnect() }
+            model?.profiles = [updated]
+        }
         return true
     }
 
@@ -82,6 +93,7 @@ final class ConnectionWorkspace {
         model?.shutdown()
         sessions.removeValue(forKey: profile.id)
         configuration.deleteConnection(profile)
+        if let message = configuration.error { error = message }
     }
 
     /// 退出时结束全部会话，包括未显示的连接和正在建立的 SSH 隧道。

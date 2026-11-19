@@ -48,6 +48,7 @@ final class LanguagePreferences {
 
     /// 恢复有效的语言选择，未知或缺失值按自动处理。
     init(defaults: UserDefaults = .standard, preferredLanguages: [String]? = nil) {
+        PreferencesMigration.migrate(into: defaults)
         self.defaults = defaults
         self.preferredLanguages = preferredLanguages
         selection = defaults.string(forKey: Self.storageKey).flatMap(LanguageSelection.init(rawValue:)) ?? .automatic
