@@ -2,6 +2,12 @@
 # 将矢量源文件渲染为预览图，并生成包含所有标准尺寸的 macOS 应用图标。
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# 加载本机配置并导出变量，供当前脚本及其启动的子进程使用。
+if [[ -f scripts/.env ]]; then
+    set -a
+    source scripts/.env
+    set +a
+fi
 icon_work_dir="$(mktemp -d "${TMPDIR:-/tmp/}zoodirector-icon.XXXXXX")"
 trap 'rm -rf "$icon_work_dir"' EXIT
 mkdir -p "$icon_work_dir/ZooDirector.iconset"

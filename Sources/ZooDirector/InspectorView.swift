@@ -76,7 +76,7 @@ struct InspectorView: View {
     /// 展示同一次读取获得的版本、时间和节点类型。
     private func metadata(_ stat: NodeStat) -> some View {
         Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 10) {
-            entry(L10n.text("类型"), stat.isEphemeral ? L10n.text("临时节点") : L10n.text("非临时节点"))
+            entry(L10n.text("类型"), stat.isEphemeral ? L10n.text("临时节点") : L10n.text("持久节点"))
             entry(L10n.text("数据版本"), String(stat.version))
             entry(L10n.text("子节点"), String(stat.childCount))
             entry(L10n.text("创建时间"), date(stat.created))

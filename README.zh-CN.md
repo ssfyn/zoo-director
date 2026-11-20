@@ -27,9 +27,51 @@ cd zoo-director
 open ".build/ZooDirector.app"
 ```
 
-开发构建使用 `./scripts/build-app.sh debug`，也可用 Xcode 打开 `Package.swift`。
+开发构建使用 `./scripts/build-app.sh debug`，也可用 Xcode 打开 `Package.swift`。可通过第二个参数指定架构，例如 `./scripts/build-app.sh release x86_64` 或 `./scripts/build-app.sh release universal`；指定架构时应用输出到 `.build/apps/架构/ZooDirector.app`，不覆盖日常开发应用。
 
 构建始终覆盖同一个应用包，重启应用后加载更新。目前生成本机架构的临时签名应用，尚未公证。应用标识为 `fan.yanan.zoodirector`。
+
+## 签名、公证与分发
+
+正式发布使用 `scripts/release-app.sh`，需要已生效的 Apple Developer Program 会员、本机钥匙串中的 Developer ID Application 证书及对应私钥，以及包含 `notarytool`、`stapler` 的 Xcode 工具。签名和公证需要网络。
+
+首次使用先将公证凭据存入钥匙串，按提示输入账号、Team ID 和 App 专用密码；使用账号认证时，API 私钥路径留空：
+
+```sh
+xcrun notarytool store-credentials "zoodirector-notary"
+security find-identity -v -p codesigning
+```
+
+从第二条命令的输出中复制自己的 Developer ID Application 完整名称或 SHA-1，写入本机的 `scripts/.env`，避免误用其他团队证书：
+
+```sh
+SIGNING_IDENTITY="Developer ID Application: 你的姓名 (TEAMID)"
+NOTARY_PROFILE="zoodirector-notary"
+```
+
+`scripts/` 下所有脚本启动时都会检查该文件，存在时按 shell 语法加载并导出变量，供当前脚本及子进程使用；文件中的赋值覆盖已有同名环境变量。含空格的值需要引号。该文件已被 Git 忽略，新克隆仓库时需要自行创建；不存在时仍可使用环境变量配置。
+
+配置后直接运行：
+
+```sh
+./scripts/release-app.sh
+```
+
+脚本先检查签名身份及公证凭据，默认依次生成三个正式产物：
+
+- `dist/ZooDirector-版本号-arm64.dmg`：Apple Silicon 版本。
+- `dist/ZooDirector-版本号-x86_64.dmg`：Intel 版本。
+- `dist/ZooDirector-版本号-universal.app`：同时包含两种架构的通用应用。
+
+每个应用均先核对架构、使用 Hardened Runtime 正式签名、公证、附加票据并验证。Universal 应用由两种架构的主程序通过 `lipo` 合并，资源必须一致，合并后重新签名、公证。DMG 包含已附加票据的应用及指向 `/Applications` 的快捷方式，DMG 自身也会签名、公证、附加票据并验证。ZIP 仅作为工作目录中的临时公证上传文件，不作为最终发布产物。默认流程共提交五次公证。
+
+三个产物均要求 macOS 14+；每次重新构建后都需重新签名、公证。交叉编译不需要运行目标架构程序，Intel 版及 Universal 应用的 Intel 架构仍应在 Intel Mac 上验证。
+
+只生成一种产物时，执行 `./scripts/release-app.sh arm64`、`./scripts/release-app.sh x86_64` 或 `./scripts/release-app.sh universal`。每种产物使用独立工作目录和公证记录；任何步骤失败都会停止后续步骤，已成功生成的其他产物会保留。
+
+凭据名称默认是 `zoodirector-notary`，可通过 `NOTARY_PROFILE` 覆盖。使用 `./scripts/release-app.sh --help` 查看说明。公证可能耗时较长；失败时会在 `dist/.release.*` 保留提交结果、工作文件和可获取的诊断日志。上传成功后即使等待中断，苹果仍可能继续处理，可用提交编号执行 `xcrun notarytool info 编号 --keychain-profile zoodirector-notary` 查询。重复发布成功会覆盖同版本、同架构的产物；验证失败不会替换已有产物。旧流程生成的 ZIP 不会自动删除。
+
+`dist/` 已被 Git 忽略。脚本只引用钥匙串凭据名称，不包含密码或私钥；不要将 App 专用密码、`.p8` 或含私钥的 `.p12` 文件提交到仓库。公证流程参考[苹果官方文档](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow)。
 
 ## 使用
 

@@ -27,9 +27,51 @@ cd zoo-director
 open ".build/ZooDirector.app"
 ```
 
-Use `./scripts/build-app.sh debug` for a development build, or open `Package.swift` in Xcode.
+Use `./scripts/build-app.sh debug` for a development build, or open `Package.swift` in Xcode. An optional second argument selects the architecture, such as `./scripts/build-app.sh release x86_64` or `./scripts/build-app.sh release universal`; explicit architecture builds go to `.build/apps/ARCH/ZooDirector.app` without replacing the development app.
 
 Builds update the same app bundle. Restart the app to load changes. The build produces an ad hoc signed app for the local architecture; it is not notarized. Bundle identifier: `fan.yanan.zoodirector`.
+
+## Signed and Notarized Releases
+
+Use `scripts/release-app.sh` with an active Apple Developer Program membership, a Developer ID Application certificate and its private key in your local Keychain, and Xcode tools including `notarytool` and `stapler`. Signing and notarization require network access.
+
+Store notarization credentials once, following the prompts for your Apple account, Team ID, and app-specific password. Leave the API private key path empty when using account authentication:
+
+```sh
+xcrun notarytool store-credentials "zoodirector-notary"
+security find-identity -v -p codesigning
+```
+
+Copy your Developer ID Application identity's full name or SHA-1 from the second command into a local `scripts/.env` to avoid signing with another team's certificate:
+
+```sh
+SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
+NOTARY_PROFILE="zoodirector-notary"
+```
+
+Every script in `scripts/` loads this file when present, using shell syntax, and exports its variables to child processes. Assignments in the file override existing environment variables. Quote values containing spaces. Git ignores this file; create it locally after cloning. Without it, scripts still accept environment variables.
+
+Then run:
+
+```sh
+./scripts/release-app.sh
+```
+
+The script checks the identity and credentials, then produces three release artifacts by default:
+
+- `dist/ZooDirector-VERSION-arm64.dmg`: Apple Silicon.
+- `dist/ZooDirector-VERSION-x86_64.dmg`: Intel.
+- `dist/ZooDirector-VERSION-universal.app`: a Universal app containing both architectures.
+
+Each app is checked for its target architecture, signed with Hardened Runtime, notarized, stapled, and validated. The Universal app merges the two main executables with `lipo`, requires identical resources, and is signed and notarized after merging. Each DMG contains the stapled app and an `/Applications` shortcut; the DMG itself is also signed, notarized, stapled, and validated. ZIP files are used only for temporary app notarization uploads inside working directories. The default workflow submits five notarization requests.
+
+All artifacts require macOS 14+. Each rebuild needs signing and notarization again. Cross-compilation does not run the target binary; test the Intel build and the Universal app's Intel slice on an Intel Mac.
+
+To generate only one artifact, run `./scripts/release-app.sh arm64`, `./scripts/release-app.sh x86_64`, or `./scripts/release-app.sh universal`. Each artifact has its own working directory and notarization records. A failure stops subsequent steps; previously published artifacts are retained.
+
+Override the default Keychain profile with `NOTARY_PROFILE`. Run `./scripts/release-app.sh --help` for usage. Notarization can take time. Failures retain submission responses, working files, and available diagnostic logs in `dist/.release.*`. Apple may continue processing an uploaded submission after an interrupted wait; query it with `xcrun notarytool info SUBMISSION_ID --keychain-profile zoodirector-notary`. Successful releases replace existing artifacts of the same version and architecture; failed validation preserves existing artifacts. ZIPs from previous workflows are not automatically removed.
+
+`dist/` is ignored by Git. The script references a Keychain profile without embedding credentials. Never commit app-specific passwords, `.p8` keys, or `.p12` files containing private keys. See [Apple's notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow).
 
 ## Usage
 

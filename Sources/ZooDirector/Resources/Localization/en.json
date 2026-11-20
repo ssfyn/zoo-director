@@ -199,7 +199,7 @@
   "选择一个节点": "Select a Node",
   "选择一个连接": "Select a Connection",
   "重新读取": "Reload",
-  "非临时节点": "Persistent node",
+  "持久节点": "Persistent node",
   "预览数据、版本与会话信息": "Preview data, versions, and session information",
   "首版限制写入不超过 1,000,000 字节。": "Writes are currently limited to 1,000,000 bytes.",
   "首选项…": "Preferences…",

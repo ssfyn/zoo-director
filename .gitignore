@@ -29,6 +29,7 @@ xcuserdata/
 *~
 
 # 本地日志和环境配置，保留可共享的配置示例
+/scripts/.env
 *.log
 .env
 .env.*
