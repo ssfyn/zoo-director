@@ -31,6 +31,12 @@ Use `./scripts/build-app.sh debug` for a development build, or open `Package.swi
 
 Builds update the same app bundle. Restart the app to load changes. The build produces an ad hoc signed app for the local architecture; it is not notarized. Bundle identifier: `fan.yanan.zoodirector`.
 
+## GitHub Actions
+
+Publishing a Release such as `v1.0.0` builds, signs, notarizes, and uploads ARM and Intel DMGs. Configure the six repository Secrets described in [the release guide](docs/releases.md) (in Chinese) first. For immutable releases, run the workflow manually for an existing tag, then publish the completed draft.
+
+Local builds display `dev` in About. Release builds use the tag version and an Actions build number. Distribution channels are explicit; App Store metadata is reserved, while store signing and uploading remain a future step.
+
 ## Signed and Notarized Releases
 
 Use `scripts/release-app.sh` with an active Apple Developer Program membership, a Developer ID Application certificate and its private key in your local Keychain, and Xcode tools including `notarytool` and `stapler`. Signing and notarization require network access.
@@ -49,12 +55,12 @@ SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 NOTARY_PROFILE="zoodirector-notary"
 ```
 
-Every script in `scripts/` loads this file when present, using shell syntax, and exports its variables to child processes. Assignments in the file override existing environment variables. Quote values containing spaces. Git ignores this file; create it locally after cloning. Without it, scripts still accept environment variables.
+The build and release shell scripts load this file locally when present, using shell syntax, and exports its variables to child processes. Assignments in the file override existing environment variables. Quote values containing spaces. Git ignores this file; create it locally after cloning. Without it, scripts still accept environment variables.
 
 Then run:
 
 ```sh
-./scripts/release-app.sh
+APP_VERSION=1.0.0 ./scripts/release-app.sh
 ```
 
 The script checks the identity and credentials, then produces three release artifacts by default:
@@ -67,7 +73,7 @@ Each app is checked for its target architecture, signed with Hardened Runtime, n
 
 All artifacts require macOS 14+. Each rebuild needs signing and notarization again. Cross-compilation does not run the target binary; test the Intel build and the Universal app's Intel slice on an Intel Mac.
 
-To generate only one artifact, run `./scripts/release-app.sh arm64`, `./scripts/release-app.sh x86_64`, or `./scripts/release-app.sh universal`. Each artifact has its own working directory and notarization records. A failure stops subsequent steps; previously published artifacts are retained.
+To generate only one artifact, run `APP_VERSION=1.0.0 ./scripts/release-app.sh arm64`, `APP_VERSION=1.0.0 ./scripts/release-app.sh x86_64`, or `APP_VERSION=1.0.0 ./scripts/release-app.sh universal`. Each artifact has its own working directory and notarization records. A failure stops subsequent steps; previously published artifacts are retained.
 
 Override the default Keychain profile with `NOTARY_PROFILE`. Run `./scripts/release-app.sh --help` for usage. Notarization can take time. Failures retain submission responses, working files, and available diagnostic logs in `dist/.release.*`. Apple may continue processing an uploaded submission after an interrupted wait; query it with `xcrun notarytool info SUBMISSION_ID --keychain-profile zoodirector-notary`. Successful releases replace existing artifacts of the same version and architecture; failed validation preserves existing artifacts. ZIPs from previous workflows are not automatically removed.
 

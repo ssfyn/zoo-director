@@ -36,3 +36,11 @@ xcuserdata/
 !.env.example
 !.env.sample
 !.env.template
+
+# 发布私钥、描述文件及 Python 工具缓存
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+__pycache__/
+*.py[cod]

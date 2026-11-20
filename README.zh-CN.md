@@ -31,6 +31,10 @@ open ".build/ZooDirector.app"
 
 构建始终覆盖同一个应用包，重启应用后加载更新。目前生成本机架构的临时签名应用，尚未公证。应用标识为 `fan.yanan.zoodirector`。
 
+## GitHub Actions
+
+发布 Release 后自动生成已签名、公证的 ARM 与 Intel DMG。本地“关于”默认显示 `dev`，Release 包使用标签版本及构建号。先按 [发布指南](docs/releases.md) 配置六个仓库 Secrets；不可变 Release 采用先手动构建草稿再发布的方式。
+
 ## 签名、公证与分发
 
 正式发布使用 `scripts/release-app.sh`，需要已生效的 Apple Developer Program 会员、本机钥匙串中的 Developer ID Application 证书及对应私钥，以及包含 `notarytool`、`stapler` 的 Xcode 工具。签名和公证需要网络。
@@ -49,12 +53,12 @@ SIGNING_IDENTITY="Developer ID Application: 你的姓名 (TEAMID)"
 NOTARY_PROFILE="zoodirector-notary"
 ```
 
-`scripts/` 下所有脚本启动时都会检查该文件，存在时按 shell 语法加载并导出变量，供当前脚本及子进程使用；文件中的赋值覆盖已有同名环境变量。含空格的值需要引号。该文件已被 Git 忽略，新克隆仓库时需要自行创建；不存在时仍可使用环境变量配置。
+本机的构建和发布 shell 脚本启动时都会检查该文件，存在时按 shell 语法加载并导出变量，供当前脚本及子进程使用；文件中的赋值覆盖已有同名环境变量。含空格的值需要引号。该文件已被 Git 忽略，新克隆仓库时需要自行创建；不存在时仍可使用环境变量配置。GitHub Actions 忽略该文件，仅使用工作流参数与 Secrets。
 
 配置后直接运行：
 
 ```sh
-./scripts/release-app.sh
+APP_VERSION=1.0.0 ./scripts/release-app.sh
 ```
 
 脚本先检查签名身份及公证凭据，默认依次生成三个正式产物：
@@ -67,7 +71,7 @@ NOTARY_PROFILE="zoodirector-notary"
 
 三个产物均要求 macOS 14+；每次重新构建后都需重新签名、公证。交叉编译不需要运行目标架构程序，Intel 版及 Universal 应用的 Intel 架构仍应在 Intel Mac 上验证。
 
-只生成一种产物时，执行 `./scripts/release-app.sh arm64`、`./scripts/release-app.sh x86_64` 或 `./scripts/release-app.sh universal`。每种产物使用独立工作目录和公证记录；任何步骤失败都会停止后续步骤，已成功生成的其他产物会保留。
+只生成一种产物时，执行 `APP_VERSION=1.0.0 ./scripts/release-app.sh arm64`、`APP_VERSION=1.0.0 ./scripts/release-app.sh x86_64` 或 `APP_VERSION=1.0.0 ./scripts/release-app.sh universal`。每种产物使用独立工作目录和公证记录；任何步骤失败都会停止后续步骤，已成功生成的其他产物会保留。
 
 凭据名称默认是 `zoodirector-notary`，可通过 `NOTARY_PROFILE` 覆盖。使用 `./scripts/release-app.sh --help` 查看说明。公证可能耗时较长；失败时会在 `dist/.release.*` 保留提交结果、工作文件和可获取的诊断日志。上传成功后即使等待中断，苹果仍可能继续处理，可用提交编号执行 `xcrun notarytool info 编号 --keychain-profile zoodirector-notary` 查询。重复发布成功会覆盖同版本、同架构的产物；验证失败不会替换已有产物。旧流程生成的 ZIP 不会自动删除。
 

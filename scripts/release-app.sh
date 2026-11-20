@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # 加载本机配置并导出变量，供当前脚本及其启动的子进程使用。
-if [[ -f scripts/.env ]]; then
+if [[ "${GITHUB_ACTIONS:-false}" != true && -f scripts/.env ]]; then
     set -a
     source scripts/.env
     set +a
@@ -12,6 +12,11 @@ fi
 # 签名身份必须通过本机配置或环境变量指定，避免误用其他团队证书。
 signing_identity="${SIGNING_IDENTITY:-}"
 notary_profile="${NOTARY_PROFILE:-zoodirector-notary}"
+# CI 使用独立临时钥匙串，本机未指定时继续使用默认钥匙串。
+notary_keychain_args=()
+if [[ -n "${NOTARY_KEYCHAIN:-}" ]]; then
+    notary_keychain_args=(--keychain "$NOTARY_KEYCHAIN")
+fi
 work_dir=""
 target_arch=""
 
@@ -19,18 +24,21 @@ target_arch=""
 show_help() {
     cat <<'HELP'
 用法：
-  ./scripts/release-app.sh
-  ./scripts/release-app.sh arm64
-  ./scripts/release-app.sh x86_64
-  ./scripts/release-app.sh universal
+  APP_VERSION=1.0.0 ./scripts/release-app.sh
+  APP_VERSION=1.0.0 ./scripts/release-app.sh arm64
+  APP_VERSION=1.0.0 ./scripts/release-app.sh x86_64
+  APP_VERSION=1.0.0 ./scripts/release-app.sh universal
   # 未配置 scripts/.env 时，也可通过环境变量指定：
-  SIGNING_IDENTITY="Developer ID Application: 姓名 (TEAMID)" ./scripts/release-app.sh
+  APP_VERSION=1.0.0 SIGNING_IDENTITY="Developer ID Application: 姓名 (TEAMID)" ./scripts/release-app.sh
 
 本机配置：
-  所有脚本启动时自动加载 scripts/.env，并导出其中的变量。
+  本机构建和发布脚本自动加载 scripts/.env；GitHub Actions 不加载。
   文件使用 shell 赋值语法；同名变量以文件中的赋值为准。
 
 环境变量：
+  APP_VERSION      必填，发行版本，例如 1.0.0 或 1.1.0-beta.1。
+  BUILD_NUMBER     构建号，默认 1。
+  DISTRIBUTION_CHANNEL  默认 github；App Store 尚需独立的签名和上传流程。
   SIGNING_IDENTITY  必填，Developer ID Application 完整名称或 SHA-1。
   NOTARY_PROFILE   钥匙串公证凭据名称，默认 zoodirector-notary。
 
@@ -72,7 +80,7 @@ check_requirements() {
               ( "$line" == *"\"${signing_identity}\"" ||
                 "$line" == *" ${signing_identity} \""* ) ]]; then
             printf '检查公证凭据：%s\n' "$notary_profile"
-            xcrun notarytool history --keychain-profile "$notary_profile" \
+            xcrun notarytool history --keychain-profile "$notary_profile" "${notary_keychain_args[@]}" \
                 --output-format json >/dev/null
             return 0
         fi
@@ -111,7 +119,7 @@ notarize_archive() {
     local submit_failed=0 submission_id notary_status
     printf '提交苹果公证（%s）并等待结果……\n' "$label"
     xcrun notarytool submit "$archive" \
-        --keychain-profile "$notary_profile" --wait --output-format json \
+        --keychain-profile "$notary_profile" "${notary_keychain_args[@]}" --wait --output-format json \
         > "$result_file" || submit_failed=1
     submission_id="$(read_notary_field id "$result_file")"
     notary_status="$(read_notary_field status "$result_file")"
@@ -123,7 +131,7 @@ notarize_archive() {
     if [[ -n "$submission_id" ]]; then
         printf '提交编号：%s\n' "$submission_id" >&2
         xcrun notarytool log "$submission_id" "$work_dir/notary-${label}-log.json" \
-            --keychain-profile "$notary_profile" || true
+            --keychain-profile "$notary_profile" "${notary_keychain_args[@]}" || true
     fi
     return 1
 }
@@ -160,7 +168,7 @@ create_dmg() {
 # 仅在全部检查成功后替换正式产物；通用应用替换失败时恢复旧版本。
 package_release() {
     local version output_file
-    version="$(plutil -extract CFBundleShortVersionString raw -o - "$work_dir/ZooDirector.app/Contents/Info.plist")"
+    version="$(plutil -extract ZooDirectorDisplayVersion raw -o - "$work_dir/ZooDirector.app/Contents/Info.plist")"
     if [[ "$target_arch" == universal ]]; then
         output_file="$PWD/dist/ZooDirector-${version}-universal.app"
         if [[ -e "$output_file" ]]; then
@@ -197,6 +205,12 @@ for target_arch in "${architectures[@]}"; do
     fi
 done
 trap report_exit EXIT
+export DISTRIBUTION_CHANNEL="${DISTRIBUTION_CHANNEL:-github}"
+python3 scripts/build-metadata.py --validate-only
+if [[ "$DISTRIBUTION_CHANNEL" != github ]]; then
+    printf '此脚本仅用于 GitHub / Developer ID 分发；App Store 发布流程尚未实现。\n' >&2
+    exit 1
+fi
 check_requirements
 mkdir -p dist
 for target_arch in "${architectures[@]}"; do

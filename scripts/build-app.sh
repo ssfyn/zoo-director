@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # 加载本机配置并导出变量，供当前脚本及其启动的子进程使用。
-if [[ -f scripts/.env ]]; then
+if [[ "${GITHUB_ACTIONS:-false}" != true && -f scripts/.env ]]; then
     set -a
     source scripts/.env
     set +a
@@ -15,6 +15,9 @@ if (( $# > 2 )) || [[ "$configuration" != release && "$configuration" != debug ]
     printf '用法：%s [release|debug] [arm64|x86_64|universal]\n' "$0" >&2
     exit 1
 fi
+
+# 在编译前验证版本；两个架构的子构建继承同一组参数。
+python3 scripts/build-metadata.py --validate-only
 
 # 合并两个架构的主程序；资源必须完全一致，合并完成后重新生成临时签名。
 build_universal() {
@@ -87,12 +90,12 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDevelopmentRegion</key><string>en</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.1.0</string>
-<key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
+# 所有版本信息在签名前落入应用包，本地缺省显示 dev。
+python3 scripts/build-metadata.py "$app_dir/Contents/Info.plist"
 codesign --force --sign - "$app_dir"
 # 更新应用包时间并重新注册，让访达重新读取原地构建后的图标资源。
 touch "$app_dir"

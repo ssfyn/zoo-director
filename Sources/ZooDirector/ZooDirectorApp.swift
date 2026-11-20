@@ -36,6 +36,9 @@ struct ZooDirectorApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1320, height: 800)
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button(L10n.text("About ZooDirector")) { AppBuildInfo.showAboutPanel() }
+            }
             CommandGroup(replacing: .appSettings) {
                 Button(L10n.text("Preferences…")) { showingPreferences = true }
                     .keyboardShortcut(",", modifiers: .command)
