@@ -65,7 +65,7 @@ final class SearchSelectionTests: XCTestCase {
         model.setSearchQuery("workers")
         XCTAssertTrue(model.rows.isEmpty)
         XCTAssertNil(model.selection)
-        XCTAssertTrue(model.searchSummary?.contains("按回车开始") == true)
+        XCTAssertTrue(model.searchSummary?.contains("press Return to begin") == true)
     }
 
     /// 当前层只筛选起点名称，展开后显示完整后代，改词及清空保留原展开缓存。

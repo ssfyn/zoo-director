@@ -144,7 +144,7 @@ final class BrowserModel {
     /// 写入过程中禁止切换上下文。
     var saving = false
     /// 界面显示的最近一次状态。
-    var status = "尚未连接"
+    var status = "Not connected"
     /// 当前连接的实时监听状态，失效时不能继续显示为实时。
     var watchStatus = ""
     /// 检查器数据已变化或节点已删除时的非阻塞提示。
@@ -204,7 +204,7 @@ final class BrowserModel {
     /// 保留部分路径注册失败等提示，避免被其他成功事件覆盖。
     private var watchProblem: String?
     /// 服务端能力识别后的实际监听模式。
-    private var watchModeStatus = "实时监听中"
+    private var watchModeStatus = "Live updates"
     /// 密码独立于连接配置存储，测试可以替换为内存实现。
     private let passwordStore: any DigestPasswordStore
     /// 可替换的连接工厂，用于验证外部变化与异常网络行为。
@@ -374,7 +374,7 @@ final class BrowserModel {
             configuration.credentialID = UUID()
             try passwordStore.save(password, id: configuration.credentialID)
         } else if try passwordStore.load(configuration.credentialID) == nil {
-            throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。")
+            throw ZooKeeperError.message("No digest password was found. Edit the connection and enter it again.")
         }
         return configuration
     }
@@ -383,7 +383,7 @@ final class BrowserModel {
     private func removeDigestPassword(_ configuration: DigestConfiguration?) {
         guard let configuration else { return }
         do { try passwordStore.remove(configuration.credentialID) }
-        catch { self.error = "配置已保存，但旧 digest 密码未能从钥匙串移除。" }
+        catch { self.error = "The configuration was saved, but the previous digest password could not be removed from Keychain." }
     }
 
     /// 删除连接及收藏，删除当前会话前先关闭连接，不自动连接其他服务。
@@ -413,7 +413,7 @@ final class BrowserModel {
     /// 在切换上下文前保护未保存的内容。
     func mayLeave() -> Bool {
         if saving { return false }
-        if dirty { error = "当前数据有未保存修改。请先保存，或点击“放弃修改”后继续。"; return false }
+        if dirty { error = "There are unsaved changes. Save or click “Discard Changes” before continuing."; return false }
         return true
     }
 
@@ -448,7 +448,7 @@ final class BrowserModel {
         filter = ""; searchScope = .current; searchSummary = nil; scannedDirectories = 0
         path = "/"; pathInput = path; history = [path]; historyIndex = 0
         creationParent = nil; deletionTargets = []
-        loading = false; reading = false; error = nil; status = "尚未连接"
+        loading = false; reading = false; error = nil; status = "Not connected"
         return previous
     }
 
@@ -460,7 +460,7 @@ final class BrowserModel {
         activeID = profile.id
         selectedConnectionID = profile.id
         connecting = true; loading = true
-        status = profile.ssh == nil ? "正在连接…" : "正在建立 SSH 隧道…"
+        status = profile.ssh == nil ? "Connecting…" : "Establishing SSH tunnel…"
         connectionTask = Task {
             await previous?.close()
             do {
@@ -471,14 +471,14 @@ final class BrowserModel {
                 guard token == connectionGeneration, !Task.isCancelled else { await connected.close(); return }
                 service = connected
                 connectionEstablished = true; connecting = false
-                status = profile.ssh == nil ? "TCP 会话" : "SSH 隧道 · TCP 会话"
+                status = profile.ssh == nil ? "TCP session" : "SSH tunnel · TCP session"
                 startWatching(connected)
                 refresh()
             } catch {
                 guard token == connectionGeneration else { return }
                 connectionEstablished = false; connecting = false; loading = false
                 activeID = nil
-                self.error = error.localizedDescription; status = "连接失败"
+                self.error = error.localizedDescription; status = "Connection failed"
             }
         }
     }
@@ -534,7 +534,7 @@ final class BrowserModel {
                 } else { showRows() }
             } catch {
                 guard token == generation else { return }
-                loading = false; self.error = error.localizedDescription; status = "读取失败 · 可手动重连"
+                loading = false; self.error = error.localizedDescription; status = "Read failed · Reconnect manually"
             }
         }
     }
@@ -561,7 +561,7 @@ final class BrowserModel {
         names = []; rows = []; selection = nil; snapshot = nil
         loading = false; reading = false
         resetWatchView()
-        searchSummary = "按节点名搜索 · 点击搜索或按回车开始"
+        searchSummary = "Search by node name · Click Search or press Return to begin"
     }
 
     /// 改变范围时清除旧结果，递归搜索必须显式发起。
@@ -585,7 +585,7 @@ final class BrowserModel {
         searching = true; loading = false; reading = false; scannedDirectories = 0
         selection = nil; snapshot = nil; rows = []; names = []
         resetWatchView()
-        searchSummary = "正在搜索当前路径及子目录…"
+        searchSummary = "Searching the current path and subdirectories…"
         searchTask = Task {
             do {
                 let result = try await NodeSearch.run(root: target, query: query, service: service) { count in
@@ -594,8 +594,8 @@ final class BrowserModel {
                 guard token == searchGeneration, context == generation, !Task.isCancelled else { return }
                 names = result.paths.sorted()
                 searching = false
-                searchSummary = "扫描 \(result.scanned) 个目录 · 跳过 \(result.skipped) 个不可读取目录"
-                    + (result.limited ? " · 已达上限，结果不完整" : " · 搜索完成")
+                searchSummary = "Scanned \(result.scanned) directories · Skipped \(result.skipped) unreadable directories"
+                    + (result.limited ? " · Limit reached; results incomplete" : " · Search complete")
                 showRows()
             } catch {
                 guard token == searchGeneration else { return }
@@ -614,7 +614,7 @@ final class BrowserModel {
     func cancelSearch() {
         searchTask?.cancel()
         searchGeneration = UUID()
-        if searching { searchSummary = "搜索已取消 · 已扫描 \(scannedDirectories) 个目录" }
+        if searching { searchSummary = "Search cancelled · Scanned \(scannedDirectories) directories" }
         searching = false
     }
 
@@ -735,9 +735,9 @@ final class BrowserModel {
                 inspectorNotice = nil
                 if let index = rows.firstIndex(where: { $0.id == selection }) { rows[index].stat = value.stat }
                 if showingTree { tree.updateMetadata(selection, stat: value.stat) }
-                status = "已保存 · 版本 \(value.stat.version)"
+                status = "Saved · Version \(value.stat.version)"
             } catch {
-                self.error = "\(error.localizedDescription)\n若服务端可能已收到写入，请重新读取后确认结果。"
+                self.error = "\(error.localizedDescription)\nIf the server may have received the write, reload the data to confirm the result."
             }
             saving = false
         }
@@ -755,14 +755,14 @@ extension BrowserModel {
         watchConnection = UUID()
         watchEventTask?.cancel(); watchSyncTask?.cancel(); watchReloadTask?.cancel(); watchReadTask?.cancel()
         watchReady = false; watchProblem = nil; watchStatus = ""
-        watchModeStatus = "实时监听中"
+        watchModeStatus = "Live updates"
         visibleListPaths = []; watchedChanges = []; watchedDirectoryChanged = false; inspectorNotice = nil
     }
 
     /// 创建独立的事件消费者，旧连接的通知不能影响新连接。
     private func startWatching(_ service: any ZooKeeperService) {
         let token = watchConnection
-        watchStatus = "监听准备中"
+        watchStatus = "Preparing live updates"
         watchEventTask = Task { [weak self] in
             let stream = await service.watchEvents()
             guard token == self?.watchConnection, !Task.isCancelled else { return }
@@ -812,7 +812,7 @@ extension BrowserModel {
         switch event {
         case .mode(let description):
             watchModeStatus = description
-            if watchProblem == nil, watchStatus.contains("监听中") { watchStatus = description }
+            if watchProblem == nil, watchStatus.hasPrefix("Live updates") { watchStatus = description }
             return
         case .unavailable(let reason):
             watchProblem = reason; watchStatus = reason
@@ -820,10 +820,10 @@ extension BrowserModel {
         case .disconnected(let reason):
             connectionEstablished = false
             watchReady = false
-            watchStatus = "实时更新已停止：\(reason)；请重新连接"
-            status = "连接已断开"
+            watchStatus = "Live updates stopped: \(reason); reconnect to continue"
+            status = "Disconnected"
             watchSyncTask?.cancel(); watchReloadTask?.cancel(); watchReadTask?.cancel()
-            inspectorNotice = dirty ? "连接已断开，未保存编辑已保留。请重新连接。" : reason
+            inspectorNotice = dirty ? "Disconnected. Your unsaved edits have been preserved. Reconnect to continue." : reason
             return
         case .resync(let target):
             if watchProblem == nil { watchStatus = watchModeStatus }
@@ -884,7 +884,7 @@ extension BrowserModel {
             refreshListSort()
         } catch {
             guard context == generation else { return }
-            watchStatus = "目录刷新失败：\(error.localizedDescription)"
+            watchStatus = "Directory refresh failed: \(error.localizedDescription)"
         }
     }
 
@@ -892,7 +892,7 @@ extension BrowserModel {
     private func refreshInspectorFromWatch() {
         guard let target = inspectedPath, let service else { return }
         guard !dirty, !saving else {
-            inspectorNotice = "服务端节点已变化，当前编辑已保留。放弃修改后可读取最新数据。"
+            inspectorNotice = "The server node changed. Your edits have been preserved. Discard changes to load the latest data."
             return
         }
         readTask?.cancel(); watchReadTask?.cancel()
@@ -906,7 +906,7 @@ extension BrowserModel {
                 guard let self, token == self.readGeneration, context == self.generation, !Task.isCancelled else { return }
                 self.reading = false
                 guard !self.dirty, !self.saving else {
-                    self.inspectorNotice = "服务端节点已变化，当前编辑已保留。放弃修改后可读取最新数据。"
+                    self.inspectorNotice = "The server node changed. Your edits have been preserved. Discard changes to load the latest data."
                     return
                 }
                 self.snapshot = value
@@ -917,8 +917,8 @@ extension BrowserModel {
                 self.reading = false
                 if !self.dirty, !self.saving { self.snapshot = nil; self.editor = "" }
                 if case ZooKeeperError.server(-101) = error {
-                    self.inspectorNotice = "当前节点已被删除；如果重新创建，将自动恢复显示。"
-                } else { self.inspectorNotice = "自动读取失败：\(error.localizedDescription)" }
+                    self.inspectorNotice = "This node was deleted. It will reappear automatically if recreated."
+                } else { self.inspectorNotice = "Automatic reload failed: \(error.localizedDescription)" }
             }
         }
     }
@@ -972,11 +972,11 @@ extension BrowserModel {
             try await service.create(target, data: Data(text.utf8), ephemeral: ephemeral)
             saving = false
             await reloadAfterMutation(paths: [parent, target])
-            status = "已新增节点 · \(target)"
+            status = "Node created · \(target)"
             return true
         } catch {
             saving = false
-            self.error = "\(error.localizedDescription)\n若发生网络中断，请先刷新确认节点是否已创建，再决定是否重试。"
+            self.error = "\(error.localizedDescription)\nIf the connection was interrupted, refresh to check whether the node was created before retrying."
             return false
         }
     }
@@ -990,7 +990,7 @@ extension BrowserModel {
         readTask?.cancel(); watchReadTask?.cancel()
         do {
             let count = try await NodeMutations.delete(paths: targets, recursive: recursive, service: service)
-            status = "已删除 \(count) 个节点"
+            status = "Deleted \(count) nodes"
         } catch { self.error = error.localizedDescription }
         saving = false
         select(nil)

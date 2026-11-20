@@ -34,12 +34,12 @@ final class ConnectionTestModel {
                 await service.close()
                 guard token == generation, !Task.isCancelled else { return }
                 running = false; succeeded = true
-                message = profile.digest == nil ? "连接成功，已完成 ZooKeeper 会话握手。"
-                    : "连接成功，已提交 digest 身份；节点权限由对应 ACL 决定。"
+                message = profile.digest == nil ? "Connection successful. The ZooKeeper session handshake is complete."
+                    : "Connected and submitted the digest identity. Access to each node is determined by its ACL."
             } catch {
                 guard token == generation, !Task.isCancelled else { return }
                 running = false; succeeded = false
-                message = "连接失败：\(error.localizedDescription)"
+                message = "Connection failed: \(error.localizedDescription)"
             }
         }
     }

@@ -53,16 +53,16 @@ struct ConnectionSheet: View {
     /// 显示真实连接的范围说明与地址输入。
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(profile == nil ? L10n.text("添加连接") : (embedded ? L10n.text("连接配置") : L10n.text("编辑连接"))).font(.title2).fontWeight(.semibold)
+            Text(profile == nil ? L10n.text("Add Connection") : (embedded ? L10n.text("Connection Settings") : L10n.text("Edit Connection"))).font(.title2).fontWeight(.semibold)
             Form {
-                TextField(L10n.text("名称（可选）"), text: $name)
-                TextField(useSSH ? L10n.text("ZooKeeper 地址（从 SSH 主机访问）") : L10n.text("服务器"), text: $endpoint)
+                TextField(L10n.text("Name (optional)"), text: $name)
+                TextField(useSSH ? L10n.text("ZooKeeper address (from SSH host)") : L10n.text("Server"), text: $endpoint)
             }
-            Toggle(L10n.text("使用 digest 认证"), isOn: $useDigest)
+            Toggle(L10n.text("Use digest authentication"), isOn: $useDigest)
             if useDigest { digestForm }
-            Toggle(L10n.text("使用 SSH 隧道"), isOn: $useSSH)
+            Toggle(L10n.text("Use SSH tunnel"), isOn: $useSSH)
             if useSSH { sshForm }
-            Text(L10n.text("支持单服务器 TCP、digest 认证与版本校验写入。暂不支持 SASL、TLS、集群故障切换与自动重连。"))
+            Text(L10n.text("Supports single-server TCP, digest authentication and version-checked writes. SASL, TLS, cluster failover and automatic reconnection are not supported yet."))
                 .font(.caption).foregroundStyle(.secondary)
             if let validation { Text(L10n.text(validation)).font(.caption).foregroundStyle(.red) }
             if let message = connectionTest.message {
@@ -70,13 +70,13 @@ struct ConnectionSheet: View {
                     .textSelection(.enabled)
             }
             HStack {
-                if !embedded { Button(L10n.text("取消")) { dismiss() }.keyboardShortcut(.cancelAction) }
+                if !embedded { Button(L10n.text("Cancel")) { dismiss() }.keyboardShortcut(.cancelAction) }
                 testControls
                 Spacer()
-                Button(profile == nil ? L10n.text("添加") : L10n.text("保存")) { submit() }
+                Button(profile == nil ? L10n.text("Add") : L10n.text("Save")) { submit() }
                     .disabled(submissionBlocked)
                 if embedded {
-                    Button(L10n.text("连接")) { submit(connectAfterSaving: true) }
+                    Button(L10n.text("Connect")) { submit(connectAfterSaving: true) }
                         .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
                         .disabled(submissionBlocked)
                 }
@@ -113,9 +113,9 @@ struct ConnectionSheet: View {
     @ViewBuilder private var testControls: some View {
         if connectionTest.running {
             ProgressView().controlSize(.small)
-            Button(L10n.text("取消测试")) { connectionTest.cancel() }
+            Button(L10n.text("Cancel Test")) { connectionTest.cancel() }
         } else {
-            Button(L10n.text("测试连接")) {
+            Button(L10n.text("Test Connection")) {
                 do {
                     let profile = try validatedDraft()
                     validation = nil
@@ -134,12 +134,12 @@ struct ConnectionSheet: View {
     private var digestForm: some View {
         VStack(alignment: .leading, spacing: 8) {
             Form {
-                TextField(L10n.text("digest 用户名"), text: $digest.username)
-                SecureField(L10n.text(profile?.digest == nil ? "digest 密码" : "digest 密码（未修改时保留已保存密码）"), text: Binding(
+                TextField(L10n.text("digest username"), text: $digest.username)
+                SecureField(L10n.text(profile?.digest == nil ? "digest password" : "digest password (leave unchanged to keep the saved password)"), text: Binding(
                     get: { password }, set: { if password != $0 { password = $0; passwordChanged = true } }
                 ))
             }
-            Text(L10n.text("密码保存在 macOS 钥匙串。digest 不加密传输，建议配合 SSH 隧道。节点权限由 ACL 决定。"))
+            Text(L10n.text("Passwords are stored in macOS Keychain. digest does not encrypt traffic; use an SSH tunnel when needed. Node access is determined by ACLs."))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -148,17 +148,17 @@ struct ConnectionSheet: View {
     private var sshForm: some View {
         VStack(alignment: .leading, spacing: 12) {
             Form {
-                TextField(L10n.text("SSH 主机"), text: $ssh.host)
-                TextField(L10n.text("SSH 端口"), value: $ssh.port, format: .number.grouping(.never))
-                TextField(L10n.text("用户名"), text: $ssh.username)
+                TextField(L10n.text("SSH host"), text: $ssh.host)
+                TextField(L10n.text("SSH port"), value: $ssh.port, format: .number.grouping(.never))
+                TextField(L10n.text("Username"), text: $ssh.username)
                 HStack {
-                    TextField(L10n.text("私钥文件（可选）"), text: $ssh.identityFile)
-                    Button(L10n.text("选择…")) { chooseIdentity() }
+                    TextField(L10n.text("Private key file (optional)"), text: $ssh.identityFile)
+                    Button(L10n.text("Choose…")) { chooseIdentity() }
                 }
             }
-            Text(L10n.text("使用私钥或系统 ssh-agent 认证；留空私钥时尝试默认密钥。不支持密码输入。加密私钥请先加入 ssh-agent。首次连接请先在终端核验并信任 SSH 主机。"))
+            Text(L10n.text("Authenticate with a private key or the system ssh-agent. Leave the key blank to try default keys. Password entry is not supported. Add encrypted keys to ssh-agent first. Verify and trust new SSH hosts in Terminal before connecting."))
                 .font(.caption).foregroundStyle(.secondary)
-            Text(L10n.text("ZooKeeper 地址由 SSH 主机解析和访问，例如 127.0.0.1:2181。"))
+            Text(L10n.text("The SSH host resolves and accesses the ZooKeeper address, for example 127.0.0.1:2181."))
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -170,7 +170,7 @@ struct ConnectionSheet: View {
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
         panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh")
-        panel.message = L10n.text("选择 SSH 私钥文件")
+        panel.message = L10n.text("Choose an SSH private key file")
         if panel.runModal() == .OK, let url = panel.url { ssh.identityFile = url.path }
     }
 

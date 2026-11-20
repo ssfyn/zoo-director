@@ -2,8 +2,8 @@ import Foundation
 
 /// 搜索范围始终以当前打开的目录为起点。
 enum SearchScope: String, CaseIterable, Identifiable {
-    case current = "当前目录"
-    case descendants = "包含子目录"
+    case current = "Current directory"
+    case descendants = "Include subdirectories"
     /// 范围选择器使用的稳定标识。
     var id: String { rawValue }
 }

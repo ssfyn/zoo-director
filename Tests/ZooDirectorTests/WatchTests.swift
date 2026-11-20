@@ -177,13 +177,13 @@ final class WatchTests: XCTestCase {
         try await eventually { model.snapshot != nil && !model.reading }
         try await eventually { await service.installed.contains("/services/api") }
         await service.remove("/services/api")
-        try await eventually { model.inspectorNotice?.contains("删除") == true }
+        try await eventually { model.inspectorNotice?.contains("deleted") == true }
         XCTAssertNil(model.snapshot)
         await service.put("/services/api", text: "recreated")
         try await eventually { model.editor == "recreated" && model.inspectorNotice == nil }
         await service.close()
-        try await eventually { model.watchStatus.contains("停止") }
-        XCTAssertTrue(model.status.contains("断开"))
+        try await eventually { model.watchStatus.contains("stopped") }
+        XCTAssertTrue(model.status.contains("Disconnected"))
         XCTAssertFalse(model.connectionEstablished)
         XCTAssertFalse(model.showingBrowser)
         model.tree.stop()
@@ -194,7 +194,7 @@ final class WatchTests: XCTestCase {
         let service = MutableWatchService()
         let model = try await browser(service)
         model.navigate("/services")
-        try await eventually { !model.loading && model.watchStatus == "实时监听中" }
+        try await eventually { !model.loading && model.watchStatus == "Live updates" }
         try await eventually { await service.installed.contains("/services") }
         try await Task.sleep(for: .milliseconds(200))
         let before = await service.childReads["/services", default: 0]

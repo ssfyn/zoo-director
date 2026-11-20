@@ -92,7 +92,7 @@ actor ZooKeeperClient: ZooKeeperService {
             guard timeout > 0, session != 0 else { throw ZooKeeperError.server(-112) }
             if let digest {
                 try digest.validate()
-                guard let password else { throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。") }
+                guard let password else { throw ZooKeeperError.message("No digest password was found. Edit the connection and enter it again.") }
                 try await authenticateDigest(username: digest.username, password: password)
                 authenticatedDigest = true
             }
@@ -115,7 +115,7 @@ actor ZooKeeperClient: ZooKeeperService {
         try digest.validate()
         if let override { return override }
         guard let saved = try store.load(digest.credentialID) else {
-            throw ZooKeeperError.message("未找到 digest 密码，请编辑连接后重新输入。")
+            throw ZooKeeperError.message("No digest password was found. Edit the connection and enter it again.")
         }
         return saved
     }
@@ -123,7 +123,7 @@ actor ZooKeeperClient: ZooKeeperService {
     /// 握手后独占读取认证响应；认证完成前不启动普通请求、心跳或监听。
     private func authenticateDigest(username: String, password: String) async throws {
         let auth = Data("\(username):\(password)".utf8)
-        guard auth.count <= 1_000_000 else { throw ZooKeeperError.message("digest 认证信息过长。") }
+        guard auth.count <= 1_000_000 else { throw ZooKeeperError.message("The digest credentials are too long.") }
         var packet = JuteWriter()
         packet.integer(Int32(-4)); packet.integer(Int32(100))
         packet.integer(Int32(0)); packet.string("digest"); packet.buffer(auth)
@@ -132,7 +132,7 @@ actor ZooKeeperClient: ZooKeeperService {
         let xid = try reply.integer(Int32.self)
         _ = try reply.integer(Int64.self)
         let code = try reply.integer(Int32.self)
-        guard xid == -4 else { throw ZooKeeperError.message("digest 认证响应无效，连接已关闭。") }
+        guard xid == -4 else { throw ZooKeeperError.message("Invalid digest authentication response. The connection was closed.") }
         guard code == 0 else { throw ZooKeeperError.server(code) }
     }
 
@@ -144,7 +144,7 @@ actor ZooKeeperClient: ZooKeeperService {
         var reply = JuteReader(data: try await request(op: 8, body: body))
         let count = try reply.integer(Int32.self)
         guard count >= 0, count <= (reply.data.count - reply.offset) / 4 else {
-            throw ZooKeeperError.message("服务端返回了无效的子节点数量。")
+            throw ZooKeeperError.message("The server returned an invalid child count.")
         }
         var names: [String] = []
         names.reserveCapacity(Int(count))
@@ -172,7 +172,7 @@ actor ZooKeeperClient: ZooKeeperService {
 
     /// 使用数据版本执行更新，网络失败时不自动重试写入。
     func write(_ path: String, data: Data, version: Int32) async throws {
-        guard data.count <= 1_000_000 else { throw ZooKeeperError.message("首版限制写入不超过 1,000,000 字节。") }
+        guard data.count <= 1_000_000 else { throw ZooKeeperError.message("Writes are currently limited to 1,000,000 bytes.") }
         var body = JuteWriter()
         body.string(try NodePath.validate(path))
         body.buffer(data)
@@ -184,7 +184,7 @@ actor ZooKeeperClient: ZooKeeperService {
     func create(_ path: String, data: Data, ephemeral: Bool) async throws {
         let path = try NodePath.validate(path)
         guard path != "/", data.count <= 1_000_000 else {
-            throw ZooKeeperError.message("不能创建根节点，节点内容不能超过 1,000,000 字节。")
+            throw ZooKeeperError.message("Cannot create the root node. Node content must not exceed 1,000,000 bytes.")
         }
         var body = JuteWriter()
         body.string(path); body.buffer(data)
@@ -197,7 +197,7 @@ actor ZooKeeperClient: ZooKeeperService {
     /// 删除单个叶节点并检查版本，服务端负责拒绝非空目录。
     func delete(_ path: String, version: Int32) async throws {
         let path = try NodePath.validate(path)
-        guard path != "/", version >= 0 else { throw ZooKeeperError.message("不能删除根节点或使用未知版本。") }
+        guard path != "/", version >= 0 else { throw ZooKeeperError.message("Cannot delete the root node or use an unknown version.") }
         var body = JuteWriter()
         body.string(path); body.integer(version)
         _ = try await request(op: 2, body: body)
@@ -205,8 +205,8 @@ actor ZooKeeperClient: ZooKeeperService {
 
     /// 注册请求后再发送，保证快速响应不会丢失。
     private func request(op: Int32, body: JuteWriter) async throws -> Data {
-        guard !closed else { throw ZooKeeperError.message("连接已断开，请重新连接。") }
-        guard pending.count < 32 else { throw ZooKeeperError.message("请求过多，请稍后再试。") }
+        guard !closed else { throw ZooKeeperError.message("Disconnected. Reconnect to continue.") }
+        guard pending.count < 32 else { throw ZooKeeperError.message("Too many requests. Try again later.") }
         let xid = nextXID
         nextXID = nextXID == Int32.max ? 1 : nextXID + 1
         var packet = JuteWriter()
@@ -230,7 +230,7 @@ actor ZooKeeperClient: ZooKeeperService {
     /// 单个请求超时即废弃会话，避免继续使用状态不明确的连接。
     private func expire(_ xid: Int32) {
         guard pending[xid] != nil else { return }
-        fail(ZooKeeperError.message("请求超时。若刚才正在保存，请重新连接并读取数据以确认写入结果。"))
+        fail(ZooKeeperError.message("The request timed out. If you were saving, reconnect and reload the data to confirm the write result."))
     }
 
     /// 分发普通请求响应、服务端监听通知与会话事件。
@@ -256,7 +256,7 @@ actor ZooKeeperClient: ZooKeeperService {
         let state = try reader.integer(Int32.self)
         let path = try reader.string()
         if type == -1 {
-            if state != 3 { fail(ZooKeeperError.message("会话状态发生变化（\(state)），请重新连接以恢复实时更新。")) }
+            if state != 3 { fail(ZooKeeperError.message("The session state changed (\(state)). Reconnect to restore live updates.")) }
         } else if let change = WatchChange(rawValue: type) {
             if watchMode == .standard { consumeLegacyNotification(path, change: change) }
             await watchHub.receive(path: path, change: change)
@@ -269,7 +269,7 @@ actor ZooKeeperClient: ZooKeeperService {
     /// 将关注范围交给串行管理器，多个界面使用同一路径时不会重复安装。
     func watch(_ paths: Set<String>, owner: UUID, revision: UInt64) async {
         await watchHub.update(paths: paths, owner: owner, revision: revision) { [weak self] path, enabled in
-            guard let self else { throw ZooKeeperError.message("连接已释放。") }
+            guard let self else { throw ZooKeeperError.message("The connection was released.") }
             try await self.changeWatch(path, enabled: enabled)
         }
     }
@@ -324,7 +324,7 @@ actor ZooKeeperClient: ZooKeeperService {
 
     /// 关闭会话传输；界面不创建临时节点，不依赖立即结束服务端会话。
     func close() async {
-        fail(ZooKeeperError.message("连接已关闭。"))
+        fail(ZooKeeperError.message("The connection was closed."))
         await tunnel?.stop()
     }
 }
@@ -389,7 +389,7 @@ extension ZooKeeperClient {
                     try await installLegacyWatches(path)
                     await watchHub.resynchronize(path)
                 } catch {
-                    if !closed { await watchHub.reportProblem("兼容监听重新注册失败：\(error.localizedDescription)") }
+                    if !closed { await watchHub.reportProblem("Could not re-register compatibility watches: \(error.localizedDescription)") }
                 }
             }
         }

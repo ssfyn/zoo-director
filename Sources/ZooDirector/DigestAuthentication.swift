@@ -11,7 +11,7 @@ struct DigestConfiguration: Codable, Hashable, Sendable {
     /// 用户名不能为空或含有协议分隔符，密码原文不裁剪。
     func validate() throws {
         guard !username.isEmpty, !username.contains(":"), !username.contains("\0") else {
-            throw ZooKeeperError.message("digest 用户名不能为空，也不能包含冒号或空字符。")
+            throw ZooKeeperError.message("The digest username cannot be empty or contain a colon or null character.")
         }
     }
 }
@@ -47,7 +47,7 @@ struct KeychainDigestPasswordStore: DigestPasswordStore {
         if status == errSecItemNotFound { return nil }
         try check(status)
         guard let data = value as? Data, let password = String(data: data, encoding: .utf8) else {
-            throw ZooKeeperError.message("钥匙串中的 digest 密码无法读取，请重新输入。")
+            throw ZooKeeperError.message("The digest password in Keychain cannot be read. Enter it again.")
         }
         return password
     }
@@ -69,7 +69,7 @@ struct KeychainDigestPasswordStore: DigestPasswordStore {
     /// 对用户报告固定错误及系统状态码，避免错误中包含用户名或密码。
     private func check(_ status: OSStatus) throws {
         guard status == errSecSuccess else {
-            throw ZooKeeperError.message("无法访问 digest 密码钥匙串（\(status)），请检查系统授权。")
+            throw ZooKeeperError.message("Cannot access the digest password in Keychain (\(status)). Check system permissions.")
         }
     }
 }

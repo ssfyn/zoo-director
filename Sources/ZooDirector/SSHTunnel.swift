@@ -16,7 +16,7 @@ struct ServerAddress: Sendable {
               url.path.isEmpty, url.query == nil, url.fragment == nil,
               !endpoint.contains(","), !host.contains(where: { $0.isWhitespace }),
               !host.contains("%") else {
-            throw ZooKeeperError.message("请输入单个 host:port（IPv6 使用 [地址]:端口），暂不支持集群串和 chroot。")
+            throw ZooKeeperError.message("Enter a single host:port (use [address]:port for IPv6). Server lists and chroot paths are not supported yet.")
         }
         self.host = host.hasPrefix("[") ? String(host.dropFirst().dropLast()) : host
         self.port = port
@@ -44,14 +44,14 @@ struct SSHConfiguration: Codable, Hashable, Sendable {
               !username.isEmpty, !username.hasPrefix("-"),
               username.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.union(
                 CharacterSet(charactersIn: "._-")).contains($0) }), (1...65535).contains(port) else {
-            throw ZooKeeperError.message("请填写有效的 SSH 主机、端口（1–65535）和用户名。IPv6 主机无需方括号。")
+            throw ZooKeeperError.message("Enter a valid SSH host, port (1–65535), and username. IPv6 hosts do not need brackets.")
         }
         if !identityFile.isEmpty {
             let path = NSString(string: identityFile).expandingTildeInPath
             var directory: ObjCBool = false
             guard path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &directory),
                   !directory.boolValue, FileManager.default.isReadableFile(atPath: path) else {
-                throw ZooKeeperError.message("SSH 私钥文件不存在或不可读取，请选择本机私钥文件。")
+                throw ZooKeeperError.message("The SSH private key is missing or unreadable. Choose a local private key file.")
             }
         }
     }
@@ -132,7 +132,7 @@ final class SSHTunnel {
                 }
                 try await Task.sleep(for: .milliseconds(50))
             }
-            throw ZooKeeperError.message("SSH 隧道建立超时，请检查主机、网络与认证设置。")
+            throw ZooKeeperError.message("The SSH tunnel timed out. Check the host, network, and authentication settings.")
         } catch {
             stop()
             throw error
@@ -144,8 +144,8 @@ final class SSHTunnel {
         let handle = try? FileHandle(forReadingFrom: errorURL)
         let data = try? handle?.read(upToCount: 4096)
         try? handle?.close()
-        let detail = data.flatMap { String(data: $0, encoding: .utf8) } ?? "SSH 进程已退出。"
-        return .message("SSH 隧道建立失败：\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\n请确认密钥可用（加密私钥请先加入 ssh-agent），并先在终端校验并信任该主机。")
+        let detail = data.flatMap { String(data: $0, encoding: .utf8) } ?? "The SSH process exited."
+        return .message("Could not establish the SSH tunnel:\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\nCheck your key (add encrypted keys to ssh-agent first), and verify and trust the host in Terminal before connecting.")
     }
 
     /// 主动结束独占隧道并清理临时文件，可重复调用。
@@ -166,7 +166,7 @@ final class SSHTunnel {
     /// 让系统分配空闲回环端口；竞争占用由 SSH 的转发失败检查显式报告。
     private static func availablePort() throws -> Int {
         let descriptor = socket(AF_INET, SOCK_STREAM, 0)
-        guard descriptor >= 0 else { throw ZooKeeperError.message("无法创建 SSH 本地转发端口。") }
+        guard descriptor >= 0 else { throw ZooKeeperError.message("Could not create a local SSH forwarding port.") }
         defer { Darwin.close(descriptor) }
         var address = sockaddr_in()
         address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
@@ -181,7 +181,7 @@ final class SSHTunnel {
         let inspected = withUnsafeMutablePointer(to: &address) { pointer in
             pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(descriptor, $0, &size) }
         }
-        guard result == 0, inspected == 0 else { throw ZooKeeperError.message("无法分配 SSH 本地转发端口。") }
+        guard result == 0, inspected == 0 else { throw ZooKeeperError.message("Could not allocate a local SSH forwarding port.") }
         return Int(UInt16(bigEndian: address.sin_port))
     }
 }

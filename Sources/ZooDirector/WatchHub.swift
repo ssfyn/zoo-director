@@ -54,7 +54,7 @@ actor WatchHub {
     /// 最近一次不可用原因，供稍后订阅的界面取得状态。
     private var failure: String?
     /// 服务端能力选择完成后的状态说明。
-    private var mode = "实时监听中"
+    private var mode = "Live updates"
 
     /// 为独立消费者创建有界事件流，终止后自动释放续体。
     func events() -> AsyncStream<WatchEvent> {
@@ -62,7 +62,7 @@ actor WatchHub {
         let pair = AsyncStream<WatchEvent>.makeStream(bufferingPolicy: .bufferingNewest(1_024))
         pair.continuation.onTermination = { [weak self] _ in Task { await self?.removeListener(id) } }
         if closed {
-            pair.continuation.yield(.disconnected(failure ?? "连接已关闭"))
+            pair.continuation.yield(.disconnected(failure ?? "Connection closed"))
             pair.continuation.finish()
         } else {
             listeners[id] = pair.continuation
@@ -115,7 +115,7 @@ actor WatchHub {
         while !closed, !Task.isCancelled {
             if let path = installed.subtracting(desired).sorted().first {
                 do { try await change(path, false) }
-                catch { publish(.unavailable("移除监听失败：\(error.localizedDescription)")) }
+                catch { publish(.unavailable("Could not remove watch: \(error.localizedDescription)")) }
                 installed.remove(path)
                 continue
             }
@@ -130,9 +130,9 @@ actor WatchHub {
                 rejected.insert(path)
                 if case ZooKeeperError.server(-6) = error {
                     unsupported = true
-                    failure = "服务端不支持持久 Watch，需要 ZooKeeper 3.6 或以上；请手动刷新。"
-                } else { failure = "监听注册失败：\(error.localizedDescription)" }
-                publish(.unavailable(failure ?? "监听注册失败"))
+                    failure = "The server does not support persistent watches (ZooKeeper 3.6 or later required). Refresh manually."
+                } else { failure = "Watch registration failed: \(error.localizedDescription)" }
+                publish(.unavailable(failure ?? "Watch registration failed"))
             }
         }
     }

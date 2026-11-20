@@ -89,15 +89,15 @@ enum ZooKeeperError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .message(let message): return message
-        case .server(-101): return "节点不存在，请刷新父节点。"
-        case .server(-102): return "没有节点访问权限，请检查 digest 用户名、密码及节点 ACL。"
-        case .server(-103): return "数据已被其他客户端修改。请重新读取后再编辑。"
-        case .server(-108): return "临时节点不能包含子节点。"
-        case .server(-110): return "节点已存在，请使用其他名称。"
-        case .server(-111): return "节点包含子节点，请勾选同时删除所有子节点。"
-        case .server(-115): return "digest 认证失败，请检查认证配置。"
-        case .server(-112): return "会话已过期，请重新连接。"
-        case .server(let code): return "ZooKeeper 返回错误：\(code)"
+        case .server(-101): return "The node does not exist. Refresh the parent node."
+        case .server(-102): return "No permission to access this node. Check the digest username, password and node ACL."
+        case .server(-103): return "Another client modified the data. Reload before editing."
+        case .server(-108): return "Ephemeral nodes cannot have children."
+        case .server(-110): return "The node already exists. Choose another name."
+        case .server(-111): return "The node has children. Select “Delete all child nodes” to continue."
+        case .server(-115): return "digest authentication failed. Check the authentication settings."
+        case .server(-112): return "The session expired. Reconnect to continue."
+        case .server(let code): return "ZooKeeper error: \(code)"
         }
     }
 }
@@ -114,7 +114,7 @@ enum NodePath {
                   return value == 0 || (1...31).contains(value) || (127...159).contains(value)
                       || (0xD800...0xF8FF).contains(value) || (0xFFF0...0xFFFF).contains(value)
               }) else {
-            throw ZooKeeperError.message("请输入合法的绝对路径，例如 /services/api。")
+            throw ZooKeeperError.message("Enter a valid absolute path, for example /services/api.")
         }
         return path
     }
@@ -135,10 +135,10 @@ enum NodePath {
 extension ZooKeeperService {
     /// 为只读服务保留明确的创建失败提示。
     func create(_ path: String, data: Data, ephemeral: Bool) async throws {
-        throw ZooKeeperError.message("当前服务不支持新增节点。")
+        throw ZooKeeperError.message("This service does not support creating nodes.")
     }
     /// 为只读服务保留明确的删除失败提示。
     func delete(_ path: String, version: Int32) async throws {
-        throw ZooKeeperError.message("当前服务不支持删除节点。")
+        throw ZooKeeperError.message("This service does not support deleting nodes.")
     }
 }

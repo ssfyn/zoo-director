@@ -52,7 +52,7 @@ final class CoreTests: XCTestCase {
         do {
             try await demo.write("/services", data: Data(), version: value.stat.version)
             XCTFail("旧版本写入必须失败")
-        } catch { XCTAssertTrue(error.localizedDescription.contains("修改")) }
+        } catch { XCTAssertTrue(error.localizedDescription.contains("modified")) }
         let changed = try await demo.read("/services")
         XCTAssertEqual(String(data: changed.data, encoding: .utf8), "updated")
     }
@@ -110,7 +110,7 @@ final class CoreTests: XCTestCase {
             do {
                 try await client.write("/zoodirector-test", data: Data(), version: snapshot.stat.version)
                 XCTFail("真实服务应拒绝过期版本")
-            } catch { XCTAssertTrue(error.localizedDescription.contains("修改")) }
+            } catch { XCTAssertTrue(error.localizedDescription.contains("modified")) }
             await client.close()
         } catch {
             await client.close()

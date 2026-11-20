@@ -42,7 +42,7 @@ final class ZooKeeperTransport: Sendable {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             let once = OneShot(continuation)
             queue.asyncAfter(deadline: .now() + timeout) { [connection] in
-                if once.resolve(.failure(ZooKeeperError.message("连接超时，请检查地址和网络。"))) {
+                if once.resolve(.failure(ZooKeeperError.message("Connection timed out. Check the address and network."))) {
                     connection.cancel()
                 }
             }
@@ -50,7 +50,7 @@ final class ZooKeeperTransport: Sendable {
                 switch state {
                 case .ready: once.resolve(.success(()))
                 case .failed(let error): once.resolve(.failure(error))
-                case .cancelled: once.resolve(.failure(ZooKeeperError.message("连接已关闭。")))
+                case .cancelled: once.resolve(.failure(ZooKeeperError.message("The connection was closed.")))
                 default: break
                 }
             }
@@ -63,7 +63,7 @@ final class ZooKeeperTransport: Sendable {
         let data: Data = try await withCheckedThrowingContinuation { continuation in
             let once = OneShot<Data>(continuation)
             queue.asyncAfter(deadline: .now() + 2) { [connection] in
-                if once.resolve(.failure(ZooKeeperError.message("版本查询超时"))) { connection.cancel() }
+                if once.resolve(.failure(ZooKeeperError.message("Version query timed out"))) { connection.cancel() }
             }
             connection.receive(minimumIncompleteLength: 1, maximumLength: 4_096) { data, _, _, error in
                 if let error { once.resolve(.failure(error)) }
@@ -89,14 +89,14 @@ final class ZooKeeperTransport: Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             let once = OneShot<Data>(continuation)
             queue.asyncAfter(deadline: .now() + 15) { [connection] in
-                if once.resolve(.failure(ZooKeeperError.message("等待服务端响应超时，请重新连接。"))) {
+                if once.resolve(.failure(ZooKeeperError.message("Timed out waiting for the server. Reconnect to continue."))) {
                     connection.cancel()
                 }
             }
             connection.receive(minimumIncompleteLength: count, maximumLength: count) { data, _, _, error in
                 if let error { once.resolve(.failure(error)) }
                 else if let data, data.count == count { once.resolve(.success(data)) }
-                else { once.resolve(.failure(ZooKeeperError.message("服务端已关闭连接。"))) }
+                else { once.resolve(.failure(ZooKeeperError.message("The server closed the connection."))) }
             }
         }
     }
@@ -106,7 +106,7 @@ final class ZooKeeperTransport: Sendable {
         var header = JuteReader(data: try await receive(4))
         let length = try header.integer(Int32.self)
         guard length > 0, length <= 16 * 1024 * 1024 else {
-            throw ZooKeeperError.message("响应帧长度无效或超过 16 MiB 限制。")
+            throw ZooKeeperError.message("The response frame length is invalid or exceeds the 16 MiB limit.")
         }
         return try await receive(Int(length))
     }

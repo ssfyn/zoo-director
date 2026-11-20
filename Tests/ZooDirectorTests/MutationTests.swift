@@ -32,7 +32,7 @@ final class MutationTests: XCTestCase {
         do {
             _ = try await NodeMutations.delete(paths: ["/sibling", "/batch"], recursive: false, service: service)
             XCTFail("非空目标必须在预检阶段拒绝")
-        } catch { XCTAssertTrue(error.localizedDescription.contains("尚未删除")) }
+        } catch { XCTAssertTrue(error.localizedDescription.contains("No nodes have been deleted")) }
         _ = try await service.stat("/sibling")
         let roots = try NodeMutations.deletionRoots(["/batch", "/batch/child"])
         let count = try await NodeMutations.delete(paths: roots, recursive: true, service: service)

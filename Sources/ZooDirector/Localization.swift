@@ -1,20 +1,20 @@
 import Foundation
 
-/// 展示层统一翻译入口；模型保留原始状态与错误，切换语言时无需重建连接。
+/// 以英文为源文案的翻译入口；模型保留英文状态，切换语言时无需重建连接。
 @MainActor
 enum L10n {
     /// 简体中文与英文目录，随应用资源一起发布。
     static let catalogs: [String: [String: String]] = ["en": load("en"), "zh-Hans": load("zh-Hans")]
     /// 只有嵌套错误才递归翻译，用户填写的连接名、路径和服务端数据保持原文。
     private static let nestedErrors: [String: Int] = [
-        "SSH 隧道建立失败：\n{0}\n请确认密钥可用（加密私钥请先加入 ssh-agent），并先在终端校验并信任该主机。": 0,
-        "{0}\n若发生网络中断，请先刷新确认节点是否已创建，再决定是否重试。": 0,
-        "{0}\n若服务端可能已收到写入，请重新读取后确认结果。": 0,
-        "兼容监听重新注册失败：{0}": 0,
-        "实时更新已停止：{0}；请重新连接": 0,
-        "已确认删除 {0} 个节点，在 {1} 处停止：{2}\n批量删除不是原子操作；若发生网络中断，当前请求的结果可能未知，请刷新确认。": 2,
-        "监听注册失败：{0}": 0, "目录刷新失败：{0}": 0,
-        "移除监听失败：{0}": 0, "自动读取失败：{0}": 0, "连接失败：{0}": 0
+        "Could not establish the SSH tunnel:\n{0}\nCheck your key (add encrypted keys to ssh-agent first), and verify and trust the host in Terminal before connecting.": 0,
+        "{0}\nIf the connection was interrupted, refresh to check whether the node was created before retrying.": 0,
+        "{0}\nIf the server may have received the write, reload the data to confirm the result.": 0,
+        "Could not re-register compatibility watches: {0}": 0,
+        "Live updates stopped: {0}; reconnect to continue": 0,
+        "Confirmed deletion of {0} nodes; stopped at {1}: {2}\nBatch deletion is not atomic. If the connection was interrupted, the current request's result may be unknown. Refresh to confirm.": 2,
+        "Watch registration failed: {0}": 0, "Directory refresh failed: {0}": 0,
+        "Could not remove watch: {0}": 0, "Automatic reload failed: {0}": 0, "Connection failed: {0}": 0
     ]
     /// 已预编译的动态消息模板，优先匹配包含更多固定文字的完整消息。
     private static let patterns: [(key: String, regex: NSRegularExpression)] = {
@@ -56,9 +56,8 @@ enum L10n {
 
     /// 翻译固定标签或带路径、数量和嵌套错误的状态消息；不修改原始业务数据。
     static func text(_ source: String, language: String, depth: Int = 0) -> String {
-        guard language == "en", depth < 5 else { return source }
+        guard language == "zh-Hans", depth < 5 else { return source }
         if let value = catalogs[language]?[source] { return value }
-        guard source.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) else { return source }
         let range = NSRange(source.startIndex..., in: source)
         for template in patterns {
             guard let match = template.regex.firstMatch(in: source, range: range),

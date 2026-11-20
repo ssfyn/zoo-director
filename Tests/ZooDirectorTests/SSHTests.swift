@@ -82,7 +82,7 @@ final class SSHTests: XCTestCase {
             _ = try await failing.start(configuration: SSHConfiguration(host: "127.0.0.1", port: 1, username: "operator"),
                                         endpoint: "localhost:2181")
             XCTFail("关闭端口不应建立隧道")
-        } catch { XCTAssertTrue(error.localizedDescription.contains("SSH 隧道建立失败")) }
+        } catch { XCTAssertTrue(error.localizedDescription.contains("Could not establish the SSH tunnel")) }
         failing.stop()
         SSHTunnel.stopAll()
     }

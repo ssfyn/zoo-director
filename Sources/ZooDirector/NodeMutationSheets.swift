@@ -16,23 +16,23 @@ struct CreateNodeSheet: View {
     /// 展示名称、类型、初始内容和明确的创建动作。
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.text("新增节点")).font(.title2.bold())
-            Text(L10n.text("父节点：\(parent)")).textSelection(.enabled).lineLimit(3)
-            TextField(L10n.text("节点名称"), text: $name)
-            Picker(L10n.text("节点类型"), selection: $ephemeral) {
-                Text(L10n.text("持久节点")).tag(false)
-                Text(L10n.text("临时节点")).tag(true)
+            Text(L10n.text("New Node")).font(.title2.bold())
+            Text(L10n.text("Parent: \(parent)")).textSelection(.enabled).lineLimit(3)
+            TextField(L10n.text("Node name"), text: $name)
+            Picker(L10n.text("Node type"), selection: $ephemeral) {
+                Text(L10n.text("Persistent node")).tag(false)
+                Text(L10n.text("Ephemeral node")).tag(true)
             }
-            if ephemeral { Text(L10n.text("当前连接的会话结束后自动删除，不能包含子节点。")).font(.caption).foregroundStyle(.secondary) }
-            Text(L10n.text("初始内容（可留空）"))
+            if ephemeral { Text(L10n.text("Automatically deleted when the current connection's session ends. Cannot have children.")).font(.caption).foregroundStyle(.secondary) }
+            Text(L10n.text("Initial content (optional)"))
             TextEditor(text: $text).font(.system(.body, design: .monospaced))
                 .frame(height: 160).border(.separator)
-            Text(L10n.text(model.selectedProfile?.digest == nil ? "权限：world:anyone，可读写。" : "权限：当前 digest 身份，可读写。")) .font(.caption).foregroundStyle(.secondary)
+            Text(L10n.text(model.selectedProfile?.digest == nil ? "Permissions: world:anyone, read and write." : "Permissions: read/write access for the current digest identity.")) .font(.caption).foregroundStyle(.secondary)
             HStack {
                 if model.saving { ProgressView().controlSize(.small) }
                 Spacer()
-                Button(L10n.text("取消")) { model.creationParent = nil }.keyboardShortcut(.cancelAction)
-                Button(L10n.text("创建")) {
+                Button(L10n.text("Cancel")) { model.creationParent = nil }.keyboardShortcut(.cancelAction)
+                Button(L10n.text("Create")) {
                     Task {
                         if await model.createNode(parent: parent, name: name, text: text, ephemeral: ephemeral) {
                             model.creationParent = nil
@@ -41,10 +41,10 @@ struct CreateNodeSheet: View {
                 }.keyboardShortcut(.defaultAction).disabled(name.isEmpty)
             }
         }.padding(24).frame(width: 480).disabled(model.saving).interactiveDismissDisabled(model.saving)
-        .alert(L10n.text("新增失败"), isPresented: Binding(
+        .alert(L10n.text("Could Not Create Node"), isPresented: Binding(
             get: { model.error != nil }, set: { if !$0 { model.error = nil } }
         )) {
-            Button(L10n.text("好"), role: .cancel) { model.error = nil }
+            Button(L10n.text("OK"), role: .cancel) { model.error = nil }
         } message: { Text(L10n.text(model.error ?? "")) }
     }
 }
@@ -61,19 +61,19 @@ struct DeleteNodesSheet: View {
     /// 展示目标清单、递归选项和不可撤销的最终操作。
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(L10n.text("删除 \(targets.count) 个节点？")).font(.title2.bold())
+            Text(L10n.text("Delete \(targets.count) nodes?")).font(.title2.bold())
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
                     ForEach(targets, id: \.self) { Text($0).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
                 }
             }.frame(maxHeight: 180)
-            Toggle(L10n.text("同时删除所有子节点"), isOn: $recursive)
-            Text(L10n.text("删除后无法恢复。批量删除逐个执行，遇到错误即停止，已成功删除的节点不会回滚。"))
+            Toggle(L10n.text("Delete all child nodes"), isOn: $recursive)
+            Text(L10n.text("Deletion cannot be undone. Nodes are deleted individually; the operation stops on error and completed deletions are not rolled back."))
                 .font(.callout).foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button(L10n.text("取消")) { model.deletionTargets = [] }.keyboardShortcut(.cancelAction)
-                Button(L10n.text("删除"), role: .destructive) { Task { await model.deleteNodes(recursive: recursive) } }
+                Button(L10n.text("Cancel")) { model.deletionTargets = [] }.keyboardShortcut(.cancelAction)
+                Button(L10n.text("Delete"), role: .destructive) { Task { await model.deleteNodes(recursive: recursive) } }
             }
         }.padding(24).frame(width: 480)
     }

@@ -40,25 +40,25 @@ struct BrowserView: View {
         .sheet(isPresented: Binding(get: { !model.deletionTargets.isEmpty }, set: { if !$0 { model.deletionTargets = [] } })) {
             DeleteNodesSheet(model: model, targets: model.deletionTargets)
         }
-        .alert(L10n.text("操作未完成"), isPresented: Binding(get: { displayedError != nil && model.creationParent == nil }, set: { if !$0 { clearError() } })) {
-            Button(L10n.text("好"), role: .cancel) { clearError() }
+        .alert(L10n.text("Operation Failed"), isPresented: Binding(get: { displayedError != nil && model.creationParent == nil }, set: { if !$0 { clearError() } })) {
+            Button(L10n.text("OK"), role: .cancel) { clearError() }
         } message: { Text(L10n.text(displayedError ?? "")) }
-        .confirmationDialog(L10n.text("保存节点数据？"), isPresented: $confirmingSave, titleVisibility: .visible) {
-            Button(L10n.text("保存到 ZooKeeper")) { model.save() }
-            Button(L10n.text("取消"), role: .cancel) {}
+        .confirmationDialog(L10n.text("Save node data?"), isPresented: $confirmingSave, titleVisibility: .visible) {
+            Button(L10n.text("Save to ZooKeeper")) { model.save() }
+            Button(L10n.text("Cancel"), role: .cancel) {}
         } message: {
-            Text(L10n.text("将更新 \(model.inspectedPath ?? "")。使用当前版本进行检查；其他客户端修改过的数据不会被覆盖。"))
+            Text(L10n.text("This will update \(model.inspectedPath ?? "") using the current version. Data modified by another client will not be overwritten."))
         }
-        .confirmationDialog(L10n.text("删除连接？"), isPresented: Binding(
+        .confirmationDialog(L10n.text("Delete connection?"), isPresented: Binding(
             get: { deletingConnection != nil }, set: { if !$0 { deletingConnection = nil } }
         ), titleVisibility: .visible) {
-            Button(L10n.text("删除连接"), role: .destructive) {
+            Button(L10n.text("Delete Connection"), role: .destructive) {
                 if let profile = deletingConnection { workspace.delete(profile) }
                 deletingConnection = nil
             }
-            Button(L10n.text("取消"), role: .cancel) { deletingConnection = nil }
+            Button(L10n.text("Cancel"), role: .cancel) { deletingConnection = nil }
         } message: {
-            Text(L10n.text("将删除“\(deletingConnection?.displayName ?? "")”的本机配置和收藏。该连接的会话会关闭，其他会话继续保持。ZooKeeper 服务端数据不受影响。"))
+            Text(L10n.text("The local configuration and favorites for “\(deletingConnection?.displayName ?? "")” will be deleted and its session closed. Other sessions will remain connected. ZooKeeper server data will not be affected."))
         }
         .onReceive(NotificationCenter.default.publisher(for: .confirmSave)) { _ in confirmingSave = true }
         .onReceive(NotificationCenter.default.publisher(for: .focusPath)) { _ in pathFocused = true }
@@ -80,7 +80,7 @@ struct BrowserView: View {
                     ProgressView().controlSize(.large)
                     Text(L10n.text(model.status)).font(.headline)
                     Text(profile.displayName).foregroundStyle(.secondary)
-                    Button(L10n.text("取消连接")) { model.disconnect() }
+                    Button(L10n.text("Cancel Connection")) { model.disconnect() }
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if model.showingBrowser {
                 connectedContent
@@ -92,9 +92,9 @@ struct BrowserView: View {
             }
         } else {
             VStack(spacing: 16) {
-                ContentUnavailableView(L10n.text("选择一个连接"), systemImage: "externaldrive.connected.to.line.below",
-                                       description: Text(L10n.text("从左侧选择已有连接，或添加新的连接配置。")))
-                Button(L10n.text("添加连接")) { workspace.configuration.beginAddingConnection() }.buttonStyle(.borderedProminent)
+                ContentUnavailableView(L10n.text("Select a Connection"), systemImage: "externaldrive.connected.to.line.below",
+                                       description: Text(L10n.text("Select a connection in the sidebar, or add a new connection.")))
+                Button(L10n.text("Add Connection")) { workspace.configuration.beginAddingConnection() }.buttonStyle(.borderedProminent)
             }.frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
@@ -124,30 +124,30 @@ struct BrowserView: View {
                     .overlay { Circle().stroke(.background, lineWidth: 1.5) }
                     .offset(x: 2, y: 1)
             }
-            .accessibilityLabel((workspace.session(for: profile)?.isConnected(profile) == true) ? L10n.text("已连接") : L10n.text("未连接"))
+            .accessibilityLabel((workspace.session(for: profile)?.isConnected(profile) == true) ? L10n.text("Connected") : L10n.text("Not connected"))
     }
 
     /// 提供显式连接、取消或关闭会话以及配置编辑和删除操作。
     @ViewBuilder private func connectionMenu(_ profile: ConnectionProfile) -> some View {
         let session = workspace.session(for: profile)
         if session?.isConnected(profile) == true || session?.connecting == true {
-            Button(session?.connecting == true ? L10n.text("取消连接") : L10n.text("关闭连接"), systemImage: "stop.circle") {
+            Button(session?.connecting == true ? L10n.text("Cancel Connection") : L10n.text("Close Connection"), systemImage: "stop.circle") {
                 workspace.disconnect(profile)
             }.disabled(session?.saving == true)
         } else {
-            Button(L10n.text("连接"), systemImage: "bolt") { workspace.connect(profile) }.disabled(session?.saving == true)
+            Button(L10n.text("Connect"), systemImage: "bolt") { workspace.connect(profile) }.disabled(session?.saving == true)
         }
         Divider()
-        Button(L10n.text("编辑连接…"), systemImage: "pencil") { workspace.configuration.beginEditingConnection(profile) }
+        Button(L10n.text("Edit Connection…"), systemImage: "pencil") { workspace.configuration.beginEditingConnection(profile) }
             .disabled(session?.saving == true)
-        Button(L10n.text("删除连接…"), systemImage: "trash", role: .destructive) { deletingConnection = profile }
+        Button(L10n.text("Delete Connection…"), systemImage: "trash", role: .destructive) { deletingConnection = profile }
             .disabled(session?.saving == true)
     }
 
     /// 展示连接管理和当前连接专属的收藏位置。
     private var sidebar: some View {
         List {
-            Section(L10n.text("连接列表")) {
+            Section(L10n.text("Connections")) {
                 ForEach(workspace.configuration.profiles) { profile in
                     Button { workspace.select(profile) } label: {
                         HStack(spacing: 9) {
@@ -169,18 +169,18 @@ struct BrowserView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             Button { workspace.configuration.beginAddingConnection() } label: {
-                Label(L10n.text("添加连接"), systemImage: "plus").frame(maxWidth: .infinity, alignment: .leading)
+                Label(L10n.text("Add Connection"), systemImage: "plus").frame(maxWidth: .infinity, alignment: .leading)
             }.buttonStyle(.plain).padding()
         }
     }
 
     /// 收藏随连接切换，点击沿用普通目录导航和未保存内容保护。
     private var favoriteSection: some View {
-        Section(L10n.text("收藏位置")) {
+        Section(L10n.text("Favorites")) {
             if !model.showingBrowser {
-                Text(L10n.text("连接后可收藏目录")).font(.caption).foregroundStyle(.secondary)
+                Text(L10n.text("Connect to add favorite folders")).font(.caption).foregroundStyle(.secondary)
             } else if model.favorites.isEmpty {
-                Text(L10n.text("右键点击目录可收藏"))
+                Text(L10n.text("Right-click a folder to add a favorite"))
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 ForEach(model.favorites, id: \.self) { path in
@@ -192,7 +192,7 @@ struct BrowserView: View {
                     }
                     .buttonStyle(.plain).disabled(model.saving).help(path)
                     .contextMenu {
-                        Button(L10n.text("移除收藏"), systemImage: "star.slash") { model.removeFavorite(path) }
+                        Button(L10n.text("Remove from Favorites"), systemImage: "star.slash") { model.removeFavorite(path) }
                     }
                 }
             }
@@ -203,18 +203,18 @@ struct BrowserView: View {
     private var addressBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "folder").foregroundStyle(.blue)
-            TextField(L10n.text("绝对路径，例如 /services"), text: $model.pathInput)
+            TextField(L10n.text("Absolute path, e.g. /services"), text: $model.pathInput)
                 .font(.system(.body, design: .monospaced)).textFieldStyle(.plain)
                 .focused($pathFocused).onSubmit { model.navigate(model.pathInput) }
                 .disabled(model.saving)
-            Button(L10n.text("前往")) { model.navigate(model.pathInput) }.disabled(model.saving)
+            Button(L10n.text("Go")) { model.navigate(model.pathInput) }.disabled(model.saving)
             Button { model.beginCreatingNode() } label: { Image(systemName: "plus") }
-                .help(L10n.text("新增节点 ⌘⇧N")).keyboardShortcut("n", modifiers: [.command, .shift]).disabled(!model.canMutateNodes)
+                .help(L10n.text("New Node ⌘⇧N")).keyboardShortcut("n", modifiers: [.command, .shift]).disabled(!model.canMutateNodes)
             Button { model.beginDeletingNodes() } label: { Image(systemName: "trash") }
-                .help(L10n.text("删除所选节点 ⌘⌫")).keyboardShortcut(.delete, modifiers: .command).disabled(!model.canMutateNodes || model.deletableSelection.isEmpty)
+                .help(L10n.text("Delete Selected Nodes ⌘⌫")).keyboardShortcut(.delete, modifiers: .command).disabled(!model.canMutateNodes || model.deletableSelection.isEmpty)
         }.padding(.horizontal, 16).padding(.vertical, 12)
         .contextMenu {
-            Button(model.isCurrentPathFavorite ? L10n.text("移除收藏") : L10n.text("收藏")) { model.toggleCurrentFavorite() }
+            Button(model.isCurrentPathFavorite ? L10n.text("Remove from Favorites") : L10n.text("Add to Favorites")) { model.toggleCurrentFavorite() }
                 .disabled(!model.isCurrentPathFavorite && !model.canFavoriteCurrentPath)
         }
     }
@@ -237,7 +237,7 @@ struct BrowserView: View {
                         revision: model.rowsRevision, selectedPath: model.selection, blocked: model.dirty || model.saving, selectedPaths: model.selectedPaths)
             .overlay {
                 if model.rows.isEmpty && !model.loading {
-                    ContentUnavailableView(L10n.text("没有子节点"), systemImage: "folder", description: Text(L10n.text("当前目录为空，或没有匹配的节点。")))
+                    ContentUnavailableView(L10n.text("No Child Nodes"), systemImage: "folder", description: Text(L10n.text("This directory is empty, or no nodes match your search.")))
                 }
             }
     }
@@ -245,18 +245,18 @@ struct BrowserView: View {
     /// 右上角使用紧凑的搜索框与范围选择，保留显式启动递归搜索的操作。
     private var searchControls: some View {
         HStack(spacing: 8) {
-            TextField(L10n.text("搜索节点名称"), text: Binding(
+            TextField(L10n.text("Search node names"), text: Binding(
                 get: { model.filter }, set: { model.setSearchQuery($0) }
             )).textFieldStyle(.roundedBorder).frame(width: 210).onSubmit { model.search() }
-            Picker(L10n.text("搜索范围"), selection: Binding(
+            Picker(L10n.text("Search scope"), selection: Binding(
                 get: { model.searchScope }, set: { model.searchScope = $0; model.changeSearchScope() }
             )) {
                 ForEach(SearchScope.allCases) { scope in Text(L10n.text(scope.rawValue)).tag(scope) }
             }.labelsHidden().frame(width: 115)
             if model.searching {
-                Button(L10n.text("取消")) { model.cancelSearch() }
+                Button(L10n.text("Cancel")) { model.cancelSearch() }
             } else if model.searchScope == .descendants {
-                Button(L10n.text("搜索")) { model.search() }
+                Button(L10n.text("Search")) { model.search() }
                     .disabled(model.filter.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }.controlSize(.regular).disabled(model.dirty || model.saving)
@@ -267,11 +267,11 @@ struct BrowserView: View {
         if model.searching {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.mini)
-                Text(L10n.text("已扫描 \(model.scannedDirectories) 个目录"))
+                Text(L10n.text("Scanned \(model.scannedDirectories) directories"))
                 Spacer()
             }.font(.caption).foregroundStyle(.secondary).padding(10)
         } else if let summary = model.searchSummary {
-            Text(L10n.text(summary)).font(.caption).foregroundStyle(summary.contains("不完整") ? .orange : .secondary)
+            Text(L10n.text(summary)).font(.caption).foregroundStyle(summary.contains("incomplete") ? .orange : .secondary)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(10)
         }
     }
@@ -292,15 +292,15 @@ struct BrowserView: View {
         HStack(spacing: 16) {
             Button { model.navigate("/") } label: { Image(systemName: "house") }
                 .disabled(model.path == "/" || model.saving)
-                .help(L10n.text("回到根节点 /")).accessibilityLabel(L10n.text("回到根节点"))
+                .help(L10n.text("Go to Root /")).accessibilityLabel(L10n.text("Go to Root"))
             Button { model.moveHistory(-1) } label: { Image(systemName: "chevron.left") }
-                .disabled(!model.canBack || model.saving).help(L10n.text("后退 ⌘["))
+                .disabled(!model.canBack || model.saving).help(L10n.text("Back ⌘["))
             Button { model.moveHistory(1) } label: { Image(systemName: "chevron.right") }
-                .disabled(!model.canForward || model.saving).help(L10n.text("前进 ⌘]"))
+                .disabled(!model.canForward || model.saving).help(L10n.text("Forward ⌘]"))
             Button { model.navigate(NodePath.parent(of: model.path)) } label: { Image(systemName: "arrow.up") }
-                .disabled(model.path == "/" || model.saving).help(L10n.text("上一级 ⌘↑"))
+                .disabled(model.path == "/" || model.saving).help(L10n.text("Up One Level ⌘↑"))
             Button { model.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                .disabled(model.saving).help(L10n.text("刷新 ⌘R"))
+                .disabled(model.saving).help(L10n.text("Refresh ⌘R"))
         }.controlSize(.regular)
     }
 
@@ -308,8 +308,8 @@ struct BrowserView: View {
     private var statusBar: some View {
         HStack(spacing: 8) {
             if !model.watchStatus.isEmpty { Text(L10n.text(model.watchStatus)).lineLimit(1).help(L10n.text(model.watchStatus)) }
-            if model.selectedPaths.count > 1 { Text(L10n.text("已选择 \(model.selectedPaths.count) 项")) }
-            if model.dirty { Text(L10n.text("未保存")).foregroundStyle(.orange) }
+            if model.selectedPaths.count > 1 { Text(L10n.text("\(model.selectedPaths.count) items selected")) }
+            if model.dirty { Text(L10n.text("Unsaved")).foregroundStyle(.orange) }
             HStack(spacing: 8) {
                 if model.loading || model.saving { ProgressView().controlSize(.mini) }
                 nodeCount
@@ -322,9 +322,9 @@ struct BrowserView: View {
     private var nodeCount: some View {
         Group {
             if model.showingTree {
-                Text(L10n.text("\((model.tree.rows.count - (model.tree.rows.first?.node.navigationTarget == nil ? 0 : 1)).formatted()) 个已展开节点"))
+                Text(L10n.text("\((model.tree.rows.count - (model.tree.rows.first?.node.navigationTarget == nil ? 0 : 1)).formatted()) expanded nodes"))
             } else {
-                Text(L10n.text("\(model.names.count.formatted()) 项 · 当前范围"))
+                Text(L10n.text("\(model.names.count.formatted()) items · Current scope"))
             }
         }
     }

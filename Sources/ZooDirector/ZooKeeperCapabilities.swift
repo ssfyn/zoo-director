@@ -9,7 +9,7 @@ enum ZooKeeperWatchMode: Sendable {
 
     /// 状态栏显示当前实际采用的监听方式。
     var status: String {
-        self == .persistent ? "实时监听中" : "实时监听中（兼容模式）"
+        self == .persistent ? "Live updates" : "Live updates (compatibility mode)"
     }
 
     /// 只在版本明确满足要求时使用新协议，禁止通过不支持的指令试探主会话。

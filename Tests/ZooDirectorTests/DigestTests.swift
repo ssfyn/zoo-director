@@ -133,7 +133,7 @@ final class DigestTests: XCTestCase {
         do {
             _ = try await ZooKeeperClient.open(profile: profile, passwordStore: MemoryDigestPasswordStore())
             XCTFail("缺少密码必须拒绝建立匿名会话")
-        } catch { XCTAssertTrue(error.localizedDescription.contains("未找到 digest 密码")) }
+        } catch { XCTAssertTrue(error.localizedDescription.contains("No digest password")) }
     }
 
     /// 显式启用时只操作唯一临时钥匙串条目，完成后删除，不读取用户密码。

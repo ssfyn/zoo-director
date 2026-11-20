@@ -95,6 +95,8 @@ Common shortcuts: `⌘N` add a connection, `⇧⌘G` focus the path bar, `⌘R` 
 
 ## Tests
 
+UI strings use English source text as localization keys, for example `L10n.text("Preferences")`. The matching JSON catalogs are in `Sources/ZooDirector/Resources/Localization/`: `en.json` maps each key to itself and `zh-Hans.json` provides the Chinese translation. Dynamic status and error messages also use English source templates so they can be translated when displayed. Language names in the picker retain their native spelling.
+
 ```sh
 swift test --disable-sandbox
 ```

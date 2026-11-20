@@ -95,6 +95,8 @@ SSH 仅支持密钥认证，ZooKeeper 地址需为 SSH 服务器可达的地址�
 
 ## 测试
 
+界面文案统一以英文原文作为国际化 key，例如 `L10n.text("Preferences")`。翻译目录位于 `Sources/ZooDirector/Resources/Localization/`：`en.json` 的 key 与 value 相同，`zh-Hans.json` 提供对应中文。动态状态和错误提示也使用英文源模板，在显示时翻译；语言下拉选项仍固定使用各自语言的名字。
+
 ```sh
 swift test --disable-sandbox
 ```

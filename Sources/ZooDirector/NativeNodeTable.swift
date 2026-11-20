@@ -35,8 +35,8 @@ struct NativeNodeTable: NSViewRepresentable {
         table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = true
         table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
-        for (id, title, width) in [("name", L10n.text("名称"), 220.0), ("created", L10n.text("创建时间"), 140.0),
-                                  ("modified", L10n.text("修改时间"), 140.0), ("children", L10n.text("子节点"), 65.0)] {
+        for (id, title, width) in [("name", L10n.text("Name"), 220.0), ("created", L10n.text("Created"), 140.0),
+                                  ("modified", L10n.text("Modified"), 140.0), ("children", L10n.text("Children"), 65.0)] {
             let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id))
             column.title = title
             column.width = width
@@ -133,7 +133,7 @@ struct NativeNodeTable: NSViewRepresentable {
         func update(_ source: NativeNodeTable) {
             guard let table else { return }
             self.source = source
-            for (id, title) in [("name", "名称"), ("created", "创建时间"), ("modified", "修改时间"), ("children", "子节点")] {
+            for (id, title) in [("name", "Name"), ("created", "Created"), ("modified", "Modified"), ("children", "Children")] {
                 table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(id))?.title = L10n.text(title)
             }
             formatter.locale = LanguagePreferences.shared.locale
@@ -282,20 +282,20 @@ struct NativeNodeTable: NSViewRepresentable {
         /// 为点击的节点即时创建上下文菜单。
         func menuNeedsUpdate(_ menu: NSMenu) {
             menu.removeAllItems()
-            let create = menu.addItem(withTitle: L10n.text("新增节点…"), action: #selector(createContext), keyEquivalent: "")
+            let create = menu.addItem(withTitle: L10n.text("New Node…"), action: #selector(createContext), keyEquivalent: "")
             create.target = self
             create.isEnabled = source.model.canMutateNodes && !source.blocked
-            let remove = menu.addItem(withTitle: L10n.text("删除所选节点…"), action: #selector(deleteContext), keyEquivalent: "")
+            let remove = menu.addItem(withTitle: L10n.text("Delete Selected Nodes…"), action: #selector(deleteContext), keyEquivalent: "")
             remove.target = self
             remove.isEnabled = !contextDeletionPaths.isEmpty && source.model.canMutateNodes && !source.blocked
             menu.addItem(.separator())
             guard let path = contextPath else { return }
-            for (title, action) in [(L10n.text("进入节点"), #selector(enterContext)), (L10n.text("复制路径"), #selector(copyContext))] {
+            for (title, action) in [(L10n.text("Open Node"), #selector(enterContext)), (L10n.text("Copy Path"), #selector(copyContext))] {
                 let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
                 item.target = self
             }
             menu.addItem(.separator())
-            let title = source.model.favorites.contains(path) ? L10n.text("移除收藏") : L10n.text("收藏")
+            let title = source.model.favorites.contains(path) ? L10n.text("Remove from Favorites") : L10n.text("Add to Favorites")
             let item = menu.addItem(withTitle: title, action: #selector(toggleContextFavorite), keyEquivalent: "")
             item.target = self
         }
@@ -368,7 +368,7 @@ final class NodeMetadataCell: NSTableCellView {
     }
 
     /// 此单元格仅通过代码创建，不支持归档恢复。
-    required init?(coder: NSCoder) { fatalError(L10n.text("此单元格不支持归档初始化")) }
+    required init?(coder: NSCoder) { fatalError(L10n.text("This cell does not support initialization from an archive")) }
 
     /// 替换复用单元格的内容，导航行传入空文本以清除旧值。
     func configure(_ value: String) { label.stringValue = value }
@@ -401,7 +401,7 @@ final class NodeNameCell: NSTableCellView {
     /// 名称标签。
     private let label = NSTextField(labelWithString: "")
     /// 仅在元信息确认节点为临时节点时显示的文字标识。
-    private let ephemeralBadge = NSTextField(labelWithString: L10n.text("临时"))
+    private let ephemeralBadge = NSTextField(labelWithString: L10n.text("Ephemeral"))
     /// 深度变化时只更新此缩进约束。
     private var indentation: NSLayoutConstraint!
     /// 当前复用行的展开操作。
@@ -417,8 +417,8 @@ final class NodeNameCell: NSTableCellView {
         label.lineBreakMode = .byTruncatingTail
         ephemeralBadge.font = .systemFont(ofSize: 10, weight: .medium)
         ephemeralBadge.textColor = .secondaryLabelColor
-        ephemeralBadge.toolTip = L10n.text("临时节点：创建它的会话结束后自动删除")
-        ephemeralBadge.setAccessibilityLabel(L10n.text("临时节点"))
+        ephemeralBadge.toolTip = L10n.text("Ephemeral node: automatically deleted when its creating session ends")
+        ephemeralBadge.setAccessibilityLabel(L10n.text("Ephemeral node"))
         ephemeralBadge.isHidden = true
         ephemeralBadge.setContentCompressionResistancePriority(.required, for: .horizontal)
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -441,7 +441,7 @@ final class NodeNameCell: NSTableCellView {
     }
 
     /// 此单元格仅通过代码创建，不支持归档恢复。
-    required init?(coder: NSCoder) { fatalError(L10n.text("此单元格不支持归档初始化")) }
+    required init?(coder: NSCoder) { fatalError(L10n.text("This cell does not support initialization from an archive")) }
 
     /// 替换复用行内容；递归命中展示相对搜索目录的路径，普通树与导航入口保留名称。
     func configure(node: NodeRow, tree: TreeRow?, blocked: Bool, showPath: Bool = false, relativeTo directory: String = "/", onToggle: @escaping () -> Void) {
@@ -454,18 +454,18 @@ final class NodeNameCell: NSTableCellView {
         label.textColor = node.error == nil ? .labelColor : .systemOrange
         ephemeralBadge.isHidden = node.navigationTarget != nil || node.stat?.isEphemeral != true
         toolTip = node.error.map { L10n.text($0) } ?? node.id
-        ephemeralBadge.stringValue = L10n.text("临时")
-        ephemeralBadge.toolTip = L10n.text("临时节点：创建它的会话结束后自动删除")
-        ephemeralBadge.setAccessibilityLabel(L10n.text("临时节点"))
+        ephemeralBadge.stringValue = L10n.text("Ephemeral")
+        ephemeralBadge.toolTip = L10n.text("Ephemeral node: automatically deleted when its creating session ends")
+        ephemeralBadge.setAccessibilityLabel(L10n.text("Ephemeral node"))
         indentation.constant = CGFloat(min(tree?.depth ?? 0, 12)) * 16
         disclosure.isHidden = tree?.expandable != true
         disclosure.isEnabled = !blocked
         let expanded = tree?.expanded == true
-        disclosure.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right", accessibilityDescription: expanded ? L10n.text("收起") : L10n.text("展开"))
-        disclosure.setAccessibilityLabel("\(L10n.text(expanded ? "收起" : "展开")) \(node.name)")
+        disclosure.image = NSImage(systemSymbolName: expanded ? "chevron.down" : "chevron.right", accessibilityDescription: expanded ? L10n.text("Collapse") : L10n.text("Expand"))
+        disclosure.setAccessibilityLabel("\(L10n.text(expanded ? "Collapse" : "Expand")) \(node.name)")
         let parent = node.navigationTarget != nil
         icon.image = NSImage(systemSymbolName: expanded ? "folder.fill" : "folder",
-                             accessibilityDescription: parent ? L10n.text("返回上一级") : L10n.text("节点"))
+                             accessibilityDescription: parent ? L10n.text("Go to Parent") : L10n.text("Node"))
         icon.contentTintColor = .systemBlue
     }
 

@@ -37,24 +37,24 @@ struct ZooDirectorApp: App {
         .defaultSize(width: 1320, height: 800)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                Button(L10n.text("首选项…")) { showingPreferences = true }
+                Button(L10n.text("Preferences…")) { showingPreferences = true }
                     .keyboardShortcut(",", modifiers: .command)
             }
             CommandGroup(after: .newItem) {
-                Button(L10n.text("新建连接…")) { workspace.configuration.beginAddingConnection() }.keyboardShortcut("n")
-                Button(L10n.text("前往目录…")) { NotificationCenter.default.post(name: .focusPath, object: nil) }
+                Button(L10n.text("New Connection…")) { workspace.configuration.beginAddingConnection() }.keyboardShortcut("n")
+                Button(L10n.text("Go to Folder…")) { NotificationCenter.default.post(name: .focusPath, object: nil) }
                     .keyboardShortcut("g", modifiers: [.command, .shift]).disabled(!model.showingBrowser)
             }
-            CommandMenu(L10n.text("浏览")) {
-                Button(L10n.text("后退")) { model.moveHistory(-1) }.keyboardShortcut("[", modifiers: .command)
+            CommandMenu(L10n.text("Browse")) {
+                Button(L10n.text("Back")) { model.moveHistory(-1) }.keyboardShortcut("[", modifiers: .command)
                     .disabled(!model.showingBrowser || !model.canBack)
-                Button(L10n.text("前进")) { model.moveHistory(1) }.keyboardShortcut("]", modifiers: .command)
+                Button(L10n.text("Forward")) { model.moveHistory(1) }.keyboardShortcut("]", modifiers: .command)
                     .disabled(!model.showingBrowser || !model.canForward)
-                Button(L10n.text("上一级")) { model.navigate(NodePath.parent(of: model.path)) }
+                Button(L10n.text("Up One Level")) { model.navigate(NodePath.parent(of: model.path)) }
                     .keyboardShortcut(.upArrow, modifiers: .command).disabled(!model.showingBrowser || model.path == "/")
-                Button(L10n.text("刷新")) { model.refresh() }.keyboardShortcut("r").disabled(!model.showingBrowser)
+                Button(L10n.text("Refresh")) { model.refresh() }.keyboardShortcut("r").disabled(!model.showingBrowser)
                 Divider()
-                Button(L10n.text("保存数据")) { NotificationCenter.default.post(name: .confirmSave, object: nil) }.keyboardShortcut("s").disabled(!model.dirty || model.saving || !model.connectionEstablished)
+                Button(L10n.text("Save Data")) { NotificationCenter.default.post(name: .confirmSave, object: nil) }.keyboardShortcut("s").disabled(!model.dirty || model.saving || !model.connectionEstablished)
             }
         }
     }
@@ -100,10 +100,10 @@ final class ZooDirectorAppDelegate: NSObject, NSApplicationDelegate {
         if workspace?.saving == true { return .terminateCancel }
         guard workspace?.dirty == true else { return .terminateNow }
         let alert = NSAlert()
-        alert.messageText = L10n.text("连接中有未保存的修改")
-        alert.informativeText = L10n.text("退出会关闭所有连接，并放弃各连接编辑器中未保存的内容。")
-        alert.addButton(withTitle: L10n.text("继续编辑"))
-        alert.addButton(withTitle: L10n.text("放弃并退出"))
+        alert.messageText = L10n.text("Connections Have Unsaved Changes")
+        alert.informativeText = L10n.text("Quitting will close all connections and discard unsaved edits in every connection's editor.")
+        alert.addButton(withTitle: L10n.text("Continue Editing"))
+        alert.addButton(withTitle: L10n.text("Discard and Quit"))
         return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
 }

@@ -6,7 +6,7 @@ enum NodeMutations {
     static func creationPath(parent: String, name: String) throws -> String {
         _ = try NodePath.validate(parent)
         guard !name.isEmpty, !name.contains("/"), name != ".", name != ".." else {
-            throw ZooKeeperError.message("请输入单个节点名称，名称不能包含 /，也不能是 . 或 ..。")
+            throw ZooKeeperError.message("Enter a single node name. It must not contain / or be . or ..")
         }
         return try NodePath.validate(NodePath.child(name, of: parent))
     }
@@ -16,7 +16,7 @@ enum NodeMutations {
         var roots: [String] = []
         for path in paths.sorted() {
             _ = try NodePath.validate(path)
-            guard path != "/" else { throw ZooKeeperError.message("根节点不能删除。") }
+            guard path != "/" else { throw ZooKeeperError.message("The root node cannot be deleted.") }
             if !roots.contains(where: { path.hasPrefix($0 + "/") }) { roots.append(path) }
         }
         return roots
@@ -31,12 +31,12 @@ enum NodeMutations {
             let value = try await service.stat(path)
             let children = try await service.children(path)
             guard recursive || children.isEmpty else {
-                throw ZooKeeperError.message("\(path) 包含子节点。需要勾选“同时删除所有子节点”。尚未删除任何节点。")
+                throw ZooKeeperError.message("\(path) has children. Select “Delete all child nodes” to continue. No nodes have been deleted.")
             }
             plan.append((path, value.version))
             pending.append(contentsOf: children.map { NodePath.child($0, of: path) })
             guard plan.count + pending.count <= 100_000 else {
-                throw ZooKeeperError.message("单次最多删除 100,000 个节点，请缩小范围。尚未删除任何节点。")
+                throw ZooKeeperError.message("At most 100,000 nodes can be deleted at once. Narrow the selection. No nodes have been deleted.")
             }
         }
         return plan.reversed()
@@ -51,7 +51,7 @@ enum NodeMutations {
                 try await service.delete(path, version: version)
                 completed += 1
             } catch {
-                throw ZooKeeperError.message("已确认删除 \(completed) 个节点，在 \(path) 处停止：\(error.localizedDescription)\n批量删除不是原子操作；若发生网络中断，当前请求的结果可能未知，请刷新确认。")
+                throw ZooKeeperError.message("Confirmed deletion of \(completed) nodes; stopped at \(path): \(error.localizedDescription)\nBatch deletion is not atomic. If the connection was interrupted, the current request's result may be unknown. Refresh to confirm.")
             }
         }
         return completed

@@ -41,7 +41,7 @@ struct JuteReader {
     /// 读取固定宽度的大端序整数，避免未对齐的内存访问。
     mutating func integer<T: FixedWidthInteger>(_ type: T.Type = T.self) throws -> T {
         let size = MemoryLayout<T>.size
-        guard offset <= data.count - size else { throw ZooKeeperError.message("服务端响应不完整。") }
+        guard offset <= data.count - size else { throw ZooKeeperError.message("The server response is incomplete.") }
         var value: T = 0
         for byte in data[offset..<(offset + size)] { value = (value << 8) | T(truncatingIfNeeded: byte) }
         offset += size
@@ -53,7 +53,7 @@ struct JuteReader {
         let length = try integer(Int32.self)
         if length == -1 { return Data() }
         guard length >= 0, Int(length) <= data.count - offset else {
-            throw ZooKeeperError.message("服务端返回了无效的数据长度。")
+            throw ZooKeeperError.message("The server returned an invalid data length.")
         }
         defer { offset += Int(length) }
         return data.subdata(in: offset..<(offset + Int(length)))
@@ -62,7 +62,7 @@ struct JuteReader {
     /// 读取字符串，对非法 UTF-8 显式报错。
     mutating func string() throws -> String {
         guard let value = String(data: try buffer(), encoding: .utf8) else {
-            throw ZooKeeperError.message("节点名称不是有效的 UTF-8。")
+            throw ZooKeeperError.message("The node name is not valid UTF-8.")
         }
         return value
     }
