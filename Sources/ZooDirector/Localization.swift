@@ -43,10 +43,22 @@ enum L10n {
 
     /// 读取指定语言资源，缺失时保留源文案，避免影响业务操作。
     private static func load(_ language: String) -> [String: String] {
-        guard let url = Bundle.module.url(forResource: language, withExtension: "json", subdirectory: "Localization"),
+        guard let url = resourceBundle?.url(forResource: language, withExtension: "json", subdirectory: "Localization"),
               let data = try? Data(contentsOf: url),
               let values = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
         return values
+    }
+
+    /// 应用包从标准资源目录加载，命令行和测试保留 SwiftPM 的资源查找方式。
+    private static var resourceBundle: Bundle? {
+        if Bundle.main.bundleURL.pathExtension == "app" {
+            // 原生 SwiftPM 的 Bundle.module 只查应用根目录和构建机绝对路径。
+            // 应用内资源缺失时直接回退源文案，不能触发生成代码中的 fatalError。
+            guard let url = Bundle.main.resourceURL?.appendingPathComponent("ZooDirector_ZooDirector.bundle")
+            else { return nil }
+            return Bundle(url: url)
+        }
+        return Bundle.module
     }
 
     /// 在显示时读取可观察的语言选择，使菜单、弹窗和已有状态即时更新。
