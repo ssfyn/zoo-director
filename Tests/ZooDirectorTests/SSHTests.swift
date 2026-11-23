@@ -16,7 +16,7 @@ final class SSHTests: XCTestCase {
         defaults.set(try JSONEncoder().encode([original]), forKey: "zoodirector.connections")
         defaults.set(try JSONEncoder().encode([original.id.uuidString: ["/services"]]), forKey: "zoodirector.favorites")
         let model = BrowserModel(defaults: defaults)
-        let ssh = SSHConfiguration(host: "bastion.example.com", port: 2222, username: "operator")
+        let ssh = try configuration(host: "bastion.example.com", port: 2222, username: "operator")
         XCTAssertTrue(model.updateConnection(original, name: "隧道连接", endpoint: "zk.internal:2181", ssh: ssh))
         let restored = BrowserModel(defaults: defaults)
         XCTAssertEqual(restored.profiles.first { $0.id == original.id }?.ssh, ssh)
@@ -39,15 +39,16 @@ final class SSHTests: XCTestCase {
         }
         XCTAssertThrowsError(try SSHConfiguration(host: "localhost", username: "operator",
                                                  identityFile: "/nonexistent/zoodirector-key").validate())
-        try SSHConfiguration(host: "::1", username: "operator").validate()
+        try configuration(host: "::1", username: "operator").validate()
         XCTAssertEqual(try ServerAddress(endpoint: "[::1]:2181").forwardingTarget, "[::1]:2181")
     }
 
-    /// 由系统 SSH 解析实际参数，确认转发目标、回环绑定、主机校验与非交互认证。
+    /// 由系统 SSH 解析实际参数，确认转发、独立主机记录和仅公钥认证。
     func testSystemSSHAcceptsForwardingOptions() throws {
         let configuration = SSHConfiguration(host: "localhost", port: 2222, username: "operator")
         let args = configuration.arguments(target: try ServerAddress(endpoint: "[::1]:2181"),
-                                           localPort: 32181, controlPath: "/tmp/zoodirector-test-ctl")
+                                           localPort: 32181, controlPath: "/tmp/zoodirector-test-ctl",
+                                           identityPath: "/tmp/authorized-key", knownHostsPath: "/tmp/app trust/known_hosts")
         let process = Process()
         let output = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
@@ -59,8 +60,11 @@ final class SSHTests: XCTestCase {
         process.waitUntilExit()
         XCTAssertEqual(process.terminationStatus, 0)
         let text = String(decoding: data, as: UTF8.self)
-        XCTAssertTrue(text.contains("batchmode yes"))
-        XCTAssertTrue(text.contains("stricthostkeychecking true") || text.contains("stricthostkeychecking yes"))
+        XCTAssertTrue(text.contains("batchmode no"))
+        XCTAssertTrue(text.contains("identityagent none"))
+        XCTAssertTrue(text.contains("passwordauthentication no"))
+        XCTAssertTrue(text.contains("userknownhostsfile /tmp/app trust/known_hosts"))
+        XCTAssertTrue(text.contains("stricthostkeychecking ask"))
         XCTAssertTrue(text.contains("exitonforwardfailure yes"))
         XCTAssertTrue(text.contains("localforward [127.0.0.1]:32181 [::1]:2181"))
         XCTAssertTrue(text.contains("user operator"))
@@ -69,17 +73,17 @@ final class SSHTests: XCTestCase {
 
     /// 预先取消的连接不得启动 SSH；本机关闭端口应快速返回明确的隧道错误。
     func testCancellationAndSSHFailure() async throws {
-        let tunnel = try SSHTunnel()
+        let tunnel = try makeTunnel()
         let task = Task { @MainActor in
-            try await tunnel.start(configuration: SSHConfiguration(host: "127.0.0.1", port: 1, username: "operator"),
+            try await tunnel.start(configuration: try configuration(host: "127.0.0.1", port: 1, username: "operator"),
                                    endpoint: "localhost:2181")
         }
         task.cancel()
         do { _ = try await task.value; XCTFail("已取消的隧道不能建立") }
         catch { XCTAssertTrue(error is CancellationError) }
-        let failing = try SSHTunnel()
+        let failing = try makeTunnel()
         do {
-            _ = try await failing.start(configuration: SSHConfiguration(host: "127.0.0.1", port: 1, username: "operator"),
+            _ = try await failing.start(configuration: try configuration(host: "127.0.0.1", port: 1, username: "operator"),
                                         endpoint: "localhost:2181")
             XCTFail("关闭端口不应建立隧道")
         } catch { XCTAssertTrue(error.localizedDescription.contains("Could not establish the SSH tunnel")) }
@@ -95,11 +99,17 @@ final class SSHTests: XCTestCase {
               let target = environment["ZOODIRECTOR_TEST_SSH_TARGET"] else {
             throw XCTSkip("配置 ZOODIRECTOR_TEST_SSH_HOST、USER、TARGET 可验证隔离 SSH 隧道")
         }
+        guard let key = environment["ZOODIRECTOR_TEST_SSH_KEY"],
+              let knownHosts = environment["ZOODIRECTOR_TEST_SSH_KNOWN_HOSTS"] else {
+            throw XCTSkip("真实测试需要显式指定私钥和已核实的隔离服务器公钥文件")
+        }
         let configuration = SSHConfiguration(host: host,
             port: Int(environment["ZOODIRECTOR_TEST_SSH_PORT"] ?? "22") ?? 22,
-            username: username, identityFile: environment["ZOODIRECTOR_TEST_SSH_KEY"] ?? "")
+            username: username, identityFile: key,
+            identityBookmark: try SSHPrivateKey.bookmark(for: URL(fileURLWithPath: key)))
         let executable = URL(fileURLWithPath: environment["ZOODIRECTOR_TEST_SSH_EXECUTABLE"] ?? "/usr/bin/ssh")
-        let tunnel = try SSHTunnel(executableURL: executable)
+        let tunnel = try SSHTunnel(executableURL: executable, askpassURL: URL(fileURLWithPath: "/usr/bin/false"),
+                                  knownHostsURL: URL(fileURLWithPath: knownHosts))
         defer { tunnel.stop() }
         let endpoint = try await tunnel.start(configuration: configuration, endpoint: target)
         let client = try ZooKeeperClient(endpoint: endpoint, tunnel: tunnel)
@@ -121,9 +131,9 @@ final class SSHTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let executable = try fixture(in: directory, ready: true)
-        let tunnel = try SSHTunnel(executableURL: executable)
+        let tunnel = try makeTunnel(executableURL: executable)
         defer { tunnel.stop() }
-        let endpoint = try await tunnel.start(configuration: SSHConfiguration(host: "localhost", username: "operator"),
+        let endpoint = try await tunnel.start(configuration: try configuration(host: "localhost", username: "operator"),
                                                endpoint: "zk.internal:2181")
         XCTAssertEqual(try ServerAddress(endpoint: endpoint).host, "127.0.0.1")
         let pid = try fixturePID(in: directory)
@@ -138,10 +148,10 @@ final class SSHTests: XCTestCase {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let executable = try fixture(in: directory, ready: false)
-        let tunnel = try SSHTunnel(executableURL: executable)
+        let tunnel = try makeTunnel(executableURL: executable)
         defer { tunnel.stop() }
         let task = Task { @MainActor in
-            try await tunnel.start(configuration: SSHConfiguration(host: "localhost", username: "operator"),
+            try await tunnel.start(configuration: try configuration(host: "localhost", username: "operator"),
                                    endpoint: "zk.internal:2181")
         }
         for _ in 0..<200 {
@@ -153,6 +163,89 @@ final class SSHTests: XCTestCase {
         do { _ = try await task.value; XCTFail("建立过程必须可取消") }
         catch { XCTAssertTrue(error is CancellationError) }
         try await assertStopped(pid)
+    }
+
+
+    /// 创建具有真实文件书签的隔离配置，不读取开发者的任何私钥。
+    private func configuration(host: String, port: Int = 22, username: String) throws -> SSHConfiguration {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let key = directory.appendingPathComponent("fixture-key")
+        try Data("test-only-private-key".utf8).write(to: key)
+        return SSHConfiguration(host: host, port: port, username: username, identityFile: key.path,
+                                identityBookmark: try SSHPrivateKey.bookmark(for: key))
+    }
+
+    /// 用隔离的主机记录和无交互辅助程序构建测试隧道。
+    private func makeTunnel(executableURL: URL = URL(fileURLWithPath: "/usr/bin/ssh")) throws -> SSHTunnel {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        return try SSHTunnel(executableURL: executableURL, askpassURL: URL(fileURLWithPath: "/usr/bin/false"),
+                             knownHostsURL: directory.appendingPathComponent("known_hosts"))
+    }
+
+    /// 旧配置可解码但不能依赖保存的路径绕过文件授权。
+    func testLegacySSHRequiresFileAuthorization() throws {
+        let data = Data(#"{"host":"localhost","port":22,"username":"operator","identityFile":"/tmp/key"}"#.utf8)
+        let old = try JSONDecoder().decode(SSHConfiguration.self, from: data)
+        XCTAssertNil(old.identityBookmark)
+        XCTAssertThrowsError(try old.validate())
+        XCTAssertThrowsError(try SSHPrivateKey.read(bookmark: Data("invalid".utf8)))
+    }
+
+    /// 私钥暂存文件保持内容且仅当前用户可读写，不在配置中保存私钥正文。
+    func testPrivateKeyStagingPermissionsAndRoundTrip() throws {
+        let config = try configuration(host: "localhost", username: "operator")
+        let restored = try JSONDecoder().decode(SSHConfiguration.self, from: JSONEncoder().encode(config))
+        XCTAssertEqual(try SSHPrivateKey.read(bookmark: restored.identityBookmark), Data("test-only-private-key".utf8))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let staged = try SSHPrivateKey.stage(bookmark: restored.identityBookmark, in: directory)
+        let permissions = try FileManager.default.attributesOfItem(atPath: staged.path)[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.intValue, 0o600)
+        XCTAssertEqual(try Data(contentsOf: staged), Data("test-only-private-key".utf8))
+        XCTAssertFalse(String(decoding: try JSONEncoder().encode(config), as: UTF8.self).contains("test-only-private-key"))
+    }
+
+    /// 文件授权不能让目录、空文件或超出限制的数据作为私钥进入子进程。
+    func testPrivateKeyRejectsInvalidFileSizesAndDirectories() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        XCTAssertThrowsError(try SSHPrivateKey.read(bookmark: SSHPrivateKey.bookmark(for: directory)))
+        let file = directory.appendingPathComponent("key")
+        try Data().write(to: file)
+        XCTAssertThrowsError(try SSHPrivateKey.read(bookmark: SSHPrivateKey.bookmark(for: file)))
+        try Data(repeating: 0, count: 1_048_577).write(to: file)
+        XCTAssertThrowsError(try SSHPrivateKey.read(bookmark: SSHPrivateKey.bookmark(for: file)))
+    }
+
+    /// 撤销服务器身份兼容散列记录，且不移除其他服务器的信任。
+    func testForgetHashedHostPreservesOtherServers() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("known_hosts")
+        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        try "[target.example]:2222 \(key)\nother.example \(key)\n".write(to: file, atomically: true, encoding: .utf8)
+        let hash = Process()
+        hash.executableURL = URL(fileURLWithPath: "/usr/bin/ssh-keygen")
+        hash.arguments = ["-H", "-f", file.path]
+        hash.standardOutput = FileHandle.nullDevice
+        hash.standardError = FileHandle.nullDevice
+        try hash.run()
+        hash.waitUntilExit()
+        XCTAssertEqual(hash.terminationStatus, 0)
+        let before = try String(contentsOf: file, encoding: .utf8).split(separator: "\n")
+        XCTAssertEqual(before.count, 2)
+        XCTAssertTrue(before[0].hasPrefix("|1|"))
+        try SSHKnownHosts.forget(SSHConfiguration(host: "target.example", port: 2222, username: "operator"), file: file)
+        let after = try String(contentsOf: file, encoding: .utf8).split(separator: "\n")
+        XCTAssertEqual(after, [before[1]])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path + ".old"))
     }
 
     /// 创建模拟控制套接字就绪信号的进程，仅用于验证进程生命周期。

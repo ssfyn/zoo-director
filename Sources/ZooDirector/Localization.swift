@@ -7,7 +7,7 @@ enum L10n {
     static let catalogs: [String: [String: String]] = ["en": load("en"), "zh-Hans": load("zh-Hans")]
     /// 只有嵌套错误才递归翻译，用户填写的连接名、路径和服务端数据保持原文。
     private static let nestedErrors: [String: Int] = [
-        "Could not establish the SSH tunnel:\n{0}\nCheck your key (add encrypted keys to ssh-agent first), and verify and trust the host in Terminal before connecting.": 0,
+        "Could not establish the SSH tunnel:\n{0}\nCheck the selected private key and passphrase. If the server fingerprint changed, verify it with your administrator before reconnecting.": 0,
         "{0}\nIf the connection was interrupted, refresh to check whether the node was created before retrying.": 0,
         "{0}\nIf the server may have received the write, reload the data to confirm the result.": 0,
         "Could not re-register compatibility watches: {0}": 0,

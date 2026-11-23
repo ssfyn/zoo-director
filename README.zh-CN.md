@@ -29,13 +29,15 @@ open ".build/ZooDirector.app"
 
 开发构建使用 `./scripts/build-app.sh debug`，也可用 Xcode 打开 `Package.swift`。可通过第二个参数指定架构，例如 `./scripts/build-app.sh release x86_64` 或 `./scripts/build-app.sh release universal`；指定架构时应用输出到 `.build/apps/架构/ZooDirector.app`，不覆盖日常开发应用。
 
-构建始终覆盖同一个应用包，重启应用后加载更新。目前生成本机架构的临时签名应用，尚未公证。应用标识为 `fan.yanan.zoodirector`。
+构建始终覆盖同一个应用包，重启应用后加载更新。默认生成本机架构、已启用 App Sandbox 的临时签名应用，尚未公证。应用标识为 `fan.yanan.zoodirector`。商店与自行分发统一使用沙箱和相同业务功能，权限与验证说明见 [沙箱适配](docs/sandbox.md)。
 
 ## GitHub Actions
 
 发布 Release 后自动生成已签名、公证的 ARM 与 Intel DMG。本地“关于”默认显示 `dev`，Release 包使用标签版本及构建号。先按 [发布指南](docs/releases.md) 配置六个仓库 Secrets；不可变 Release 采用先手动构建草稿再发布的方式。
 
 ## 签名、公证与分发
+
+Mac App Store 打包使用 `APP_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-appstore.sh`，生成 Universal 商店安装包；随后使用 `scripts/upload-appstore.sh` 校验或显式上传，不自动提交审核。证书、可选描述文件和认证配置见 [商店发布指南](docs/appstore.md)。以下流程用于自行分发。
 
 正式发布使用 `scripts/release-app.sh`，需要已生效的 Apple Developer Program 会员、本机钥匙串中的 Developer ID Application 证书及对应私钥，以及包含 `notarytool`、`stapler` 的 Xcode 工具。签名和公证需要网络。
 
@@ -67,7 +69,7 @@ APP_VERSION=1.0.0 ./scripts/release-app.sh
 - `dist/ZooDirector-版本号-x86_64.dmg`：Intel 版本。
 - `dist/ZooDirector-版本号-universal.app`：同时包含两种架构的通用应用。
 
-每个应用均先核对架构、使用 Hardened Runtime 正式签名、公证、附加票据并验证。Universal 应用由两种架构的主程序通过 `lipo` 合并，资源必须一致，合并后重新签名、公证。DMG 包含已附加票据的应用及指向 `/Applications` 的快捷方式，DMG 自身也会签名、公证、附加票据并验证。ZIP 仅作为工作目录中的临时公证上传文件，不作为最终发布产物。默认流程共提交五次公证。
+每个应用均先核对架构、从内到外签名辅助程序与主应用，保留共用 App Sandbox 权限并启用 Hardened Runtime，再公证、附加票据并验证。Universal 应用的主程序和 SSH 授权辅助程序均通过 `lipo` 合并两种架构，资源必须一致，合并后重新签名、公证。DMG 包含已附加票据的应用及指向 `/Applications` 的快捷方式，DMG 自身也会签名、公证、附加票据并验证。ZIP 仅作为工作目录中的临时公证上传文件，不作为最终发布产物。默认流程共提交五次公证。
 
 三个产物均要求 macOS 14+；每次重新构建后都需重新签名、公证。交叉编译不需要运行目标架构程序，Intel 版及 Universal 应用的 Intel 架构仍应在 Intel Mac 上验证。
 
@@ -85,7 +87,7 @@ APP_VERSION=1.0.0 ./scripts/release-app.sh
 
 digest 用户名保存在连接配置中，密码保存在 macOS 钥匙串；编辑时不修改密码即可保留原密码。测试连接确认身份提交成功，实际读写权限由节点 ACL 决定。digest 不加密网络传输，可配合 SSH 隧道。
 
-SSH 仅支持密钥认证，ZooKeeper 地址需为 SSH 服务器可达的地址。首次使用前应在终端连接并核对 SSH 主机指纹；加密私钥需先加入 ssh-agent。
+SSH 使用明确选择的私钥认证，ZooKeeper 地址需为 SSH 服务器可达的地址。私钥通过文件选择框授权并保存只读书签，加密私钥在连接时弹窗输入口令，口令不会保存。首次连接需核对弹窗中的服务器指纹；信任记录由应用独立保存，服务器换钥后可在连接设置中使用“忘记服务器信任记录”，核实后重新连接。两种分发渠道均不再自动读取默认私钥、系统 `ssh-agent` 或 `~/.ssh/known_hosts`。旧 SSH 配置首次使用需重新选择私钥。
 
 常用快捷键：`⌘N` 添加连接、`⇧⌘G` 跳转路径、`⌘R` 刷新、`⇧⌘N` 新增节点、`⌘⌫` 删除所选节点、`⌘S` 保存、`⌘,` 首选项。
 
@@ -106,5 +108,7 @@ swift test --disable-sandbox
 ```
 
 未配置环境的真实服务测试会跳过。设置 `ZOODIRECTOR_TEST_ENDPOINT` 会启用实际读写测试，只能用于隔离实例，并需预先创建可写节点 `/zoodirector-test`。
+
+真实沙箱下的隔离 SSH／TCP 转发、钥匙串和文件权限检查可按 [沙箱适配](docs/sandbox.md) 运行。普通 `swift test` 不会给测试宿主启用 App Sandbox，不能替代这项检查。
 
 更多验证记录见 [docs/validation.md](docs/validation.md)。

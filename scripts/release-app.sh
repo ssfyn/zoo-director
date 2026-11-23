@@ -90,6 +90,16 @@ check_requirements() {
     return 1
 }
 
+# 读取实际架构而非依赖文件名，兼容不同工具链的架构输出顺序。
+verify_universal_binary() {
+    local slices
+    slices="$(lipo -archs "$1")"
+    if [[ "$slices" != "arm64 x86_64" && "$slices" != "x86_64 arm64" ]]; then
+        printf '通用二进制必须包含 arm64 和 x86_64，实际架构：%s\n' "$slices" >&2
+        return 1
+    fi
+}
+
 # 按目标架构构建并核对实际二进制架构，在独立目录中签名。
 build_and_sign() {
     local actual_arch
@@ -97,12 +107,17 @@ build_and_sign() {
     ditto ".build/apps/$target_arch/ZooDirector.app" "$work_dir/ZooDirector.app"
     actual_arch="$(lipo -archs "$work_dir/ZooDirector.app/Contents/MacOS/ZooDirector")"
     if [[ "$target_arch" == universal ]]; then
-        lipo -verify_arch arm64 x86_64 "$work_dir/ZooDirector.app/Contents/MacOS/ZooDirector"
+        verify_universal_binary "$work_dir/ZooDirector.app/Contents/MacOS/ZooDirector"
+        verify_universal_binary "$work_dir/ZooDirector.app/Contents/Helpers/ZooDirectorSSHAskpass.app/Contents/MacOS/ZooDirectorSSHAskpass"
     elif [[ "$actual_arch" != "$target_arch" ]]; then
         printf '二进制架构不符：预期 %s，实际 %s\n' "$target_arch" "$actual_arch" >&2
         return 1
     fi
-    codesign --force --options runtime --timestamp \
+    # 从内到外签名，重新签名时显式保留共用沙箱及辅助程序的继承权限。
+    codesign --force --options runtime --timestamp --sign "$signing_identity" \
+        --identifier fan.yanan.zoodirector.ssh-askpass --entitlements Resources/SSHAskpass.entitlements \
+        "$work_dir/ZooDirector.app/Contents/Helpers/ZooDirectorSSHAskpass.app"
+    codesign --force --options runtime --timestamp --entitlements Resources/ZooDirector.entitlements \
         --sign "$signing_identity" "$work_dir/ZooDirector.app"
     codesign --verify --deep --strict --verbose=2 "$work_dir/ZooDirector.app"
 }

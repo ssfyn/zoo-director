@@ -152,26 +152,53 @@ struct ConnectionSheet: View {
                 TextField(L10n.text("SSH port"), value: $ssh.port, format: .number.grouping(.never))
                 TextField(L10n.text("Username"), text: $ssh.username)
                 HStack {
-                    TextField(L10n.text("Private key file (optional)"), text: $ssh.identityFile)
+                    Text(ssh.identityFile.isEmpty ? L10n.text("Choose an SSH private key file") : ssh.identityFile)
+                        .lineLimit(1).truncationMode(.middle).help(ssh.identityFile)
                     Button(L10n.text("Choose…")) { chooseIdentity() }
                 }
             }
-            Text(L10n.text("Authenticate with a private key or the system ssh-agent. Leave the key blank to try default keys. Password entry is not supported. Add encrypted keys to ssh-agent first. Verify and trust new SSH hosts in Terminal before connecting."))
+            Text(L10n.text("Choose a private key to authorize access. Encrypted keys prompt for a passphrase at connection time. Verify the server fingerprint when asked. ZooDirector keeps its own trusted host records."))
                 .font(.caption).foregroundStyle(.secondary)
             Text(L10n.text("The SSH host resolves and accesses the ZooKeeper address, for example 127.0.0.1:2181."))
                 .font(.caption).foregroundStyle(.secondary)
+            Button(L10n.text("Forget Trusted Host…")) { forgetTrustedHost() }
+                .disabled(connectionTest.running)
         }
     }
 
-    /// 选择本机私钥文件，仅保存路径，不读取或复制私钥内容。
+    /// 撤销指定服务器的旧身份必须由用户确认，下一次连接重新核对指纹。
+    private func forgetTrustedHost() {
+        do {
+            try ssh.validateServer()
+            let alert = NSAlert()
+            alert.messageText = L10n.text("Forget this SSH server's saved key?")
+            alert.informativeText = "\(ssh.host):\(ssh.port)\n" + L10n.text(
+                "Only continue after verifying the key change with your administrator. The next connection will ask you to verify the fingerprint again.")
+            alert.addButton(withTitle: L10n.text("Cancel"))
+            alert.addButton(withTitle: L10n.text("Forget"))
+            guard alert.runModal() == .alertSecondButtonReturn else { return }
+            try SSHKnownHosts.forget(ssh)
+            validation = nil
+            connectionTest.cancel()
+        } catch { validation = error.localizedDescription }
+    }
+
+    /// 保存用户选择文件的只读书签，重新选择也可修复旧配置或过期授权。
     private func chooseIdentity() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.showsHiddenFiles = true
-        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".ssh")
         panel.message = L10n.text("Choose an SSH private key file")
-        if panel.runModal() == .OK, let url = panel.url { ssh.identityFile = url.path }
+        if panel.runModal() == .OK, let url = panel.url {
+            do {
+                let bookmark = try SSHPrivateKey.bookmark(for: url)
+                _ = try SSHPrivateKey.read(bookmark: bookmark)
+                ssh.identityFile = url.path
+                ssh.identityBookmark = bookmark
+                validation = nil
+            } catch { validation = error.localizedDescription }
+        }
     }
 
     /// 先验证地址格式，再持久化连接配置。

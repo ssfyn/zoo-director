@@ -29,15 +29,17 @@ open ".build/ZooDirector.app"
 
 Use `./scripts/build-app.sh debug` for a development build, or open `Package.swift` in Xcode. An optional second argument selects the architecture, such as `./scripts/build-app.sh release x86_64` or `./scripts/build-app.sh release universal`; explicit architecture builds go to `.build/apps/ARCH/ZooDirector.app` without replacing the development app.
 
-Builds update the same app bundle. Restart the app to load changes. The build produces an ad hoc signed app for the local architecture; it is not notarized. Bundle identifier: `fan.yanan.zoodirector`.
+Builds update the same app bundle. Restart the app to load changes. The build produces an ad hoc signed, App Sandbox-enabled app for the local architecture; it is not notarized. Store and direct distribution share the same sandbox configuration and business features; see [sandbox adaptation](docs/sandbox.md) (in Chinese). Bundle identifier: `fan.yanan.zoodirector`.
 
 ## GitHub Actions
 
 Publishing a Release such as `v1.0.0` builds, signs, notarizes, and uploads ARM and Intel DMGs. Configure the six repository Secrets described in [the release guide](docs/releases.md) (in Chinese) first. For immutable releases, run the workflow manually for an existing tag, then publish the completed draft.
 
-Local builds display `dev` in About. Release builds use the tag version and an Actions build number. Distribution channels are explicit; App Store metadata is reserved, while store signing and uploading remain a future step.
+Local builds display `dev` in About. Release builds use the tag version and an Actions build number. Distribution channels are explicit; App Store signing and uploading use separate local commands.
 
 ## Signed and Notarized Releases
+
+For the Mac App Store, run `APP_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-appstore.sh` to create a signed Universal installer package. Use `scripts/upload-appstore.sh` to validate it or explicitly upload it; neither command submits for review. See the [store distribution guide](docs/appstore.md) (in Chinese) for certificates, optional profiles, and authentication. The following workflow is for direct distribution.
 
 Use `scripts/release-app.sh` with an active Apple Developer Program membership, a Developer ID Application certificate and its private key in your local Keychain, and Xcode tools including `notarytool` and `stapler`. Signing and notarization require network access.
 
@@ -69,7 +71,7 @@ The script checks the identity and credentials, then produces three release arti
 - `dist/ZooDirector-VERSION-x86_64.dmg`: Intel.
 - `dist/ZooDirector-VERSION-universal.app`: a Universal app containing both architectures.
 
-Each app is checked for its target architecture, signed with Hardened Runtime, notarized, stapled, and validated. The Universal app merges the two main executables with `lipo`, requires identical resources, and is signed and notarized after merging. Each DMG contains the stapled app and an `/Applications` shortcut; the DMG itself is also signed, notarized, stapled, and validated. ZIP files are used only for temporary app notarization uploads inside working directories. The default workflow submits five notarization requests.
+Each app is checked for its target architecture, signed from the helper outward with shared sandbox entitlements and Hardened Runtime, notarized, stapled, and validated. The Universal app merges both the main executable and SSH authorization helper with `lipo`, requires identical resources, and is signed and notarized after merging. Each DMG contains the stapled app and an `/Applications` shortcut; the DMG itself is also signed, notarized, stapled, and validated. ZIP files are used only for temporary app notarization uploads inside working directories. The default workflow submits five notarization requests.
 
 All artifacts require macOS 14+. Each rebuild needs signing and notarization again. Cross-compilation does not run the target binary; test the Intel build and the Universal app's Intel slice on an Intel Mac.
 
@@ -87,7 +89,7 @@ Click `+` to create a node, or select a node to edit its data in the inspector. 
 
 digest usernames are stored in connection settings; passwords are stored in macOS Keychain. Leave the password unchanged when editing to keep the saved password. Connection testing confirms that the identity was submitted; actual access depends on each node's ACL. digest does not encrypt traffic and can be combined with an SSH tunnel.
 
-SSH supports key authentication only. The ZooKeeper address must be reachable from the SSH server. Connect from a terminal and verify the SSH host fingerprint before first use; add encrypted private keys to ssh-agent beforehand.
+SSH authenticates with an explicitly selected private key. The ZooKeeper address must be reachable from the SSH server. Selecting a key saves a read-only security-scoped bookmark; encrypted keys prompt for their passphrase at connection time without saving it. Verify the server fingerprint in the first-connection dialog. The app maintains its own trusted host records; use “Forget Trusted Host…” in connection settings only after verifying a server key change. Both distribution channels stop relying on default keys, the system `ssh-agent`, or `~/.ssh/known_hosts`. Reselect the private key once for existing SSH configurations.
 
 Common shortcuts: `⌘N` add a connection, `⇧⌘G` focus the path bar, `⌘R` refresh, `⇧⌘N` create a node, `⌘⌫` delete selected nodes, `⌘S` save, and `⌘,` open Settings.
 
@@ -108,5 +110,7 @@ swift test --disable-sandbox
 ```
 
 Tests requiring a real server are skipped unless configured. Setting `ZOODIRECTOR_TEST_ENDPOINT` enables actual read/write tests: use an isolated instance with a writable `/zoodirector-test` node created in advance.
+
+For a real sandbox check of isolated SSH/TCP forwarding, Keychain, and file permissions, see [sandbox adaptation](docs/sandbox.md) (in Chinese). Ordinary `swift test` does not sandbox its test host and cannot replace that check.
 
 See [docs/validation.md](docs/validation.md) for validation records (in Chinese).

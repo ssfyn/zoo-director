@@ -26,7 +26,7 @@ struct ServerAddress: Sendable {
     var forwardingTarget: String { host.contains(":") ? "[\(host)]:\(port)" : "\(host):\(port)" }
 }
 
-/// SSH 公钥认证配置，仅持久化连接参数与私钥路径，不保存密钥内容。
+/// SSH 公钥认证配置，仅持久化连接参数、显示路径及用户授予的文件书签。
 struct SSHConfiguration: Codable, Hashable, Sendable {
     /// SSH 服务器的主机名或 IP，不包含端口。
     var host = ""
@@ -34,11 +34,19 @@ struct SSHConfiguration: Codable, Hashable, Sendable {
     var port = 22
     /// SSH 登录用户名。
     var username = ""
-    /// 可选的私钥文件路径，为空时使用系统默认密钥或 ssh-agent。
+    /// 用户选择的私钥显示路径，不作为文件访问授权。
     var identityFile = ""
+    /// 私钥文件的持久只读授权；旧配置缺失时要求用户重新选择。
+    var identityBookmark: Data?
 
-    /// 校验主机、端口、用户名及显式指定的私钥文件。
+    /// 校验服务器配置和用户授权的私钥文件。
     func validate() throws {
+        try validateServer()
+        _ = try SSHPrivateKey.read(bookmark: identityBookmark)
+    }
+
+    /// 单独校验服务器身份，让撤销旧公钥时无需读取私钥。
+    func validateServer() throws {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: ".-_:"))
         guard !host.isEmpty, !host.hasPrefix("-"), host.unicodeScalars.allSatisfy(allowed.contains),
               !username.isEmpty, !username.hasPrefix("-"),
@@ -46,29 +54,25 @@ struct SSHConfiguration: Codable, Hashable, Sendable {
                 CharacterSet(charactersIn: "._-")).contains($0) }), (1...65535).contains(port) else {
             throw ZooKeeperError.message("Enter a valid SSH host, port (1–65535), and username. IPv6 hosts do not need brackets.")
         }
-        if !identityFile.isEmpty {
-            let path = NSString(string: identityFile).expandingTildeInPath
-            var directory: ObjCBool = false
-            guard path.hasPrefix("/"), FileManager.default.fileExists(atPath: path, isDirectory: &directory),
-                  !directory.boolValue, FileManager.default.isReadableFile(atPath: path) else {
-                throw ZooKeeperError.message("The SSH private key is missing or unreadable. Choose a local private key file.")
-            }
-        }
     }
 
     /// 生成独立进程的参数，不经过 shell，并限制转发只监听本机回环地址。
-    func arguments(target: ServerAddress, localPort: Int, controlPath: String) -> [String] {
-        var args = ["-F", "/dev/null", "-N", "-T", "-n", "-M", "-S", controlPath,
-                    "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+    func arguments(target: ServerAddress, localPort: Int, controlPath: String,
+                   identityPath: String, knownHostsPath: String) -> [String] {
+        let args = ["-F", "/dev/null", "-N", "-T", "-n", "-M", "-S", controlPath,
+                    "-o", "BatchMode=no", "-o", "StrictHostKeyChecking=ask",
+                    "-o", "PreferredAuthentications=publickey", "-o", "PasswordAuthentication=no",
+                    "-o", "KbdInteractiveAuthentication=no", "-o", "IdentityAgent=none",
+                    "-o", "IdentitiesOnly=yes", "-o", "AddKeysToAgent=no",
+                    "-o", "UserKnownHostsFile=\"\(knownHostsPath)\"", "-o", "GlobalKnownHostsFile=/dev/null",
+                    "-o", "HashKnownHosts=yes", "-o", "UpdateHostKeys=no",
+                    "-o", "VerifyHostKeyDNS=no", "-i", identityPath,
                     "-o", "ExitOnForwardFailure=yes", "-o", "ConnectTimeout=10",
                     "-o", "ConnectionAttempts=1", "-o", "ServerAliveInterval=15",
                     "-o", "ServerAliveCountMax=2", "-o", "ControlPersist=no",
                     "-o", "ForwardAgent=no", "-o", "PermitLocalCommand=no",
                     "-p", String(port), "-l", username,
                     "-L", "127.0.0.1:\(localPort):\(target.forwardingTarget)"]
-        if !identityFile.isEmpty {
-            args += ["-o", "IdentitiesOnly=yes", "-i", NSString(string: identityFile).expandingTildeInPath]
-        }
         return args + ["--", host]
     }
 }
@@ -82,6 +86,10 @@ final class SSHTunnel {
     private let process = Process()
     /// 系统 SSH 程序地址，测试可替换为受控进程。
     private let executableURL: URL
+    /// 继承沙箱权限的图形确认辅助程序。
+    private let askpassURL: URL
+    /// 应用自己维护的服务器公钥记录，可注入隔离位置进行测试。
+    private let knownHostsURL: URL
     /// 当前隧道独占的临时目录。
     private let directory: URL
     /// SSH 错误输出文件，避免管道缓冲区写满后阻塞。
@@ -94,10 +102,14 @@ final class SSHTunnel {
     private var stopped = false
 
     /// 分配临时目录和本机端口，目录仅允许当前用户访问。
-    init(executableURL: URL = URL(fileURLWithPath: "/usr/bin/ssh")) throws {
+    init(executableURL: URL = URL(fileURLWithPath: "/usr/bin/ssh"), askpassURL: URL? = nil,
+         knownHostsURL: URL? = nil) throws {
         self.executableURL = executableURL
+        self.askpassURL = askpassURL ?? Bundle.main.bundleURL
+            .appendingPathComponent("Contents/Helpers/ZooDirectorSSHAskpass.app/Contents/MacOS/ZooDirectorSSHAskpass")
+        self.knownHostsURL = try knownHostsURL ?? SSHKnownHosts.location()
         localPort = try Self.availablePort()
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent("csh-\(UUID().uuidString.prefix(8))")
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("ssh-\(UUID().uuidString)")
         errorURL = directory.appendingPathComponent("error.log")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
                                                attributes: [.posixPermissions: 0o700])
@@ -113,21 +125,20 @@ final class SSHTunnel {
     /// 启动隧道，控制套接字出现后才将本机地址交给 ZooKeeper 客户端。
     func start(configuration: SSHConfiguration, endpoint: String) async throws -> String {
         do {
+            try Task.checkCancellation()
             try configuration.validate()
             let target = try ServerAddress(endpoint: endpoint)
             let controlPath = directory.appendingPathComponent("ctl").path
-            process.executableURL = executableURL
-            process.arguments = configuration.arguments(target: target, localPort: localPort, controlPath: controlPath)
-            process.standardInput = FileHandle.nullDevice
-            process.standardOutput = FileHandle.nullDevice
-            process.standardError = errorHandle
+            try prepareProcess(configuration: configuration, target: target, controlPath: "ctl")
             try Task.checkCancellation()
             try process.run()
             Self.tunnels[directory.path] = self
-            for _ in 0..<240 {
+            for _ in 0..<3_600 {
                 try Task.checkCancellation()
                 guard process.isRunning else { throw failure() }
                 if FileManager.default.fileExists(atPath: controlPath) {
+                    // 认证结束即移除临时私钥，不在整个连接期间保留额外副本。
+                    try? FileManager.default.removeItem(at: directory.appendingPathComponent("identity"))
                     return "127.0.0.1:\(localPort)"
                 }
                 try await Task.sleep(for: .milliseconds(50))
@@ -139,13 +150,47 @@ final class SSHTunnel {
         }
     }
 
-    /// 汇总 SSH 的错误输出，并说明非交互认证和主机校验要求。
+    /// 准备应用私有的密钥副本和主机记录，不让子进程访问用户的系统 SSH 配置。
+    private func prepareProcess(configuration: SSHConfiguration, target: ServerAddress, controlPath: String) throws {
+        guard FileManager.default.isExecutableFile(atPath: askpassURL.path) else {
+            throw ZooKeeperError.message("The SSH authorization helper is missing. Rebuild or reinstall ZooDirector.")
+        }
+        let identity = try SSHPrivateKey.stage(bookmark: configuration.identityBookmark, in: directory)
+        let trustDirectory = knownHostsURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: trustDirectory, withIntermediateDirectories: true,
+                                               attributes: [.posixPermissions: 0o700])
+        if !FileManager.default.fileExists(atPath: knownHostsURL.path) {
+            guard FileManager.default.createFile(atPath: knownHostsURL.path, contents: Data(),
+                                                  attributes: [.posixPermissions: 0o600]) else {
+                throw ZooKeeperError.message("Cannot create the SSH trusted host records.")
+            }
+        }
+        process.executableURL = executableURL
+        // 容器路径较长，控制套接字使用会话目录下的相对路径，避免超过系统上限。
+        process.currentDirectoryURL = directory
+        process.arguments = configuration.arguments(target: target, localPort: localPort, controlPath: controlPath,
+                                                    identityPath: identity.path, knownHostsPath: knownHostsURL.path)
+        var environment = ProcessInfo.processInfo.environment
+        environment.removeValue(forKey: "SSH_AUTH_SOCK")
+        environment["SSH_ASKPASS"] = askpassURL.path
+        environment["SSH_ASKPASS_REQUIRE"] = "force"
+        environment["DISPLAY"] = ":0"
+        environment["ZOODIRECTOR_SSH_LANGUAGE"] = LanguagePreferences.shared.resolvedLanguage
+        environment["ZOODIRECTOR_SSH_CONTEXT"] = "\(configuration.username)@\(configuration.host):\(configuration.port)\n"
+            + URL(fileURLWithPath: configuration.identityFile).lastPathComponent
+        process.environment = environment
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = errorHandle
+    }
+
+    /// 汇总 SSH 错误，主机密钥变化必须由用户核实，不能自动接受。
     private func failure() -> ZooKeeperError {
         let handle = try? FileHandle(forReadingFrom: errorURL)
         let data = try? handle?.read(upToCount: 4096)
         try? handle?.close()
         let detail = data.flatMap { String(data: $0, encoding: .utf8) } ?? "The SSH process exited."
-        return .message("Could not establish the SSH tunnel:\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\nCheck your key (add encrypted keys to ssh-agent first), and verify and trust the host in Terminal before connecting.")
+        return .message("Could not establish the SSH tunnel:\n\(detail.trimmingCharacters(in: .whitespacesAndNewlines))\nCheck the selected private key and passphrase. If the server fingerprint changed, verify it with your administrator before reconnecting.")
     }
 
     /// 主动结束独占隧道并清理临时文件，可重复调用。

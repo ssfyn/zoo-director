@@ -35,7 +35,12 @@ build_universal() {
     lipo -create "$arm_app/Contents/MacOS/ZooDirector" \
         "$intel_app/Contents/MacOS/ZooDirector" \
         -output "$merge_dir/ZooDirector.app/Contents/MacOS/ZooDirector"
-    codesign --force --sign - "$merge_dir/ZooDirector.app"
+    lipo -create "$arm_app/Contents/Helpers/ZooDirectorSSHAskpass.app/Contents/MacOS/ZooDirectorSSHAskpass" \
+        "$intel_app/Contents/Helpers/ZooDirectorSSHAskpass.app/Contents/MacOS/ZooDirectorSSHAskpass" \
+        -output "$merge_dir/ZooDirector.app/Contents/Helpers/ZooDirectorSSHAskpass.app/Contents/MacOS/ZooDirectorSSHAskpass"
+    codesign --force --sign - --identifier fan.yanan.zoodirector.ssh-askpass \
+        --entitlements Resources/SSHAskpass.entitlements "$merge_dir/ZooDirector.app/Contents/Helpers/ZooDirectorSSHAskpass.app"
+    codesign --force --sign - --entitlements Resources/ZooDirector.entitlements "$merge_dir/ZooDirector.app"
     codesign --verify --deep --strict "$merge_dir/ZooDirector.app"
     # 旧产物仅在合并与签名成功后替换，失败时保留临时目录用于诊断。
     if [[ -d "$universal_app" ]]; then
@@ -74,9 +79,20 @@ if [[ -z "$target_arch" && ! -e "$app_dir" && -d "$previous_app_dir" ]]; then
 fi
 mkdir -p "$app_dir/Contents/MacOS"
 mkdir -p "$app_dir/Contents/Resources"
+helper_dir="$app_dir/Contents/Helpers/ZooDirectorSSHAskpass.app"
+# 清理早期裸辅助程序，避免原地构建时额外携带过期的单架构文件。
+rm -f "$app_dir/Contents/Helpers/ZooDirectorSSHAskpass"
+mkdir -p "$helper_dir/Contents/MacOS"
 cp "$binary_dir/ZooDirector" "$app_dir/Contents/MacOS/ZooDirector"
+cp "$binary_dir/ZooDirectorSSHAskpass" "$helper_dir/Contents/MacOS/ZooDirectorSSHAskpass"
+cp Resources/SSHAskpass-Info.plist "$helper_dir/Contents/Info.plist"
+python3 scripts/build-metadata.py "$helper_dir/Contents/Info.plist"
 cp Resources/ZooDirector.icns "$app_dir/Contents/Resources/ZooDirector.icns"
+cp Resources/PrivacyInfo.xcprivacy "$app_dir/Contents/Resources/PrivacyInfo.xcprivacy"
+cp Resources/container-migration.plist "$app_dir/Contents/Resources/container-migration.plist"
 # 将语言目录随应用打包，确保脱离构建目录后仍能加载翻译。
+# 替换整个资源包，防止调试构建残留的签名文件混入发行版和通用合并。
+rm -rf "$app_dir/Contents/Resources/ZooDirector_ZooDirector.bundle"
 cp -R "$binary_dir/ZooDirector_ZooDirector.bundle" "$app_dir/Contents/Resources/"
 cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -91,12 +107,18 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+<key>NSLocalNetworkUsageDescription</key><string>Connect to ZooKeeper and SSH servers on your local network.</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST
 # 所有版本信息在签名前落入应用包，本地缺省显示 dev。
 python3 scripts/build-metadata.py "$app_dir/Contents/Info.plist"
-codesign --force --sign - "$app_dir"
+# 辅助程序只继承静态沙箱，主应用在两种分发渠道中始终启用同一组权限。
+codesign --force --sign - --identifier fan.yanan.zoodirector.ssh-askpass \
+    --entitlements Resources/SSHAskpass.entitlements "$helper_dir"
+codesign --force --sign - --entitlements Resources/ZooDirector.entitlements "$app_dir"
+codesign --verify --deep --strict "$app_dir"
 # 更新应用包时间并重新注册，让访达重新读取原地构建后的图标资源。
 touch "$app_dir"
 if [[ -z "$target_arch" ]] && ! /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$app_dir"; then

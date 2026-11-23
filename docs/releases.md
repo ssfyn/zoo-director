@@ -78,7 +78,7 @@ CI 每个架构只生成一个 DMG，不额外上传 Universal 应用。应用�
 - `CFBundleShortVersionString`：三段数字；本地为 `0.0.0`。
 - `CFBundleVersion`：符合 Apple 格式的构建号。
 - `ZooDirectorDisplayVersion`：`dev` 或完整发行版本。
-- `ZooDirectorDistributionChannel`：`dev`、`github` 或预留的 `appstore`。
+- `ZooDirectorDistributionChannel`：`dev`、`github` 或 `appstore`。
 
 参数校验在编译前执行，非法标签、版本和构建号会明确失败。构建号首段上限为 9999；若运行编号将超过该范围，应调整生成策略并继续保持发布构建号递增。工作流重命名会改变运行编号序列，未来 App Store 上传应使用统一管理且未重复的构建号。
 
@@ -90,7 +90,7 @@ APP_VERSION=1.0.0 BUILD_NUMBER=42.1 ./scripts/release-app.sh arm64 x86_64
 
 `release-app.sh` 默认渠道为 `github`，要求显式版本；签名身份及公证 profile 的配置方式不变。未指定架构时仍保留原有本机发布行为：两个 DMG 加一个 Universal 应用。
 
-`appstore` 目前仅预留版本元信息，正式版本不能含预发布标记。现有 Developer ID 发布脚本会拒绝该渠道；商店签名、沙箱、描述文件、TestFlight / App Store Connect 上传需要后续独立接入。
+`appstore` 正式版本不能含预发布标记。Developer ID 发布脚本会拒绝该渠道；商店安装包由 `build-appstore.sh` 构建，`upload-appstore.sh` 负责校验和显式上传，两种渠道共用沙箱配置。当前 GitHub Actions 仍只发布 DMG，商店本机配置见 [商店发布指南](appstore.md)。
 
 ## 凭据与验证
 

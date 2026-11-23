@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <!-- 首次启用沙箱时仅迁移同一应用的偏好，不扩大运行时文件权限。 -->
+    <key>Move</key><array><string>${Library}/Preferences/${BundleId}.plist</string></array>
+</dict></plist>
