@@ -9,6 +9,8 @@ from pathlib import Path
 
 # 正式版本允许附加预发布或构建标记，标准版本字段只保存三段数字。
 VERSION_PATTERN = re.compile(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+# 所有构建号分配与清单写入共用同一格式约束。
+BUILD_PATTERN = re.compile(r"[1-9][0-9]{0,3}(?:\.[0-9]{1,2}){0,2}")
 
 
 def metadata(environment):
@@ -19,7 +21,7 @@ def metadata(environment):
     match = VERSION_PATTERN.fullmatch(version)
     if version != "dev" and match is None:
         raise ValueError("APP_VERSION 必须是 dev 或有效版本，例如 1.0.0、1.1.0-beta.1。")
-    if not re.fullmatch(r"[1-9][0-9]{0,3}(?:\.[0-9]{1,2}){0,2}", build):
+    if not BUILD_PATTERN.fullmatch(build):
         raise ValueError("BUILD_NUMBER 必须符合 Apple 构建号格式，例如 42 或 42.1。")
     if channel not in {"dev", "github", "appstore"}:
         raise ValueError("DISTRIBUTION_CHANNEL 必须是 dev、github 或 appstore。")

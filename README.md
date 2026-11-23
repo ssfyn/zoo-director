@@ -39,7 +39,7 @@ Local builds display `dev` in About. Release builds use the tag version and an A
 
 ## Signed and Notarized Releases
 
-For the Mac App Store, run `APP_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-appstore.sh` to create a signed Universal installer package. Use `scripts/upload-appstore.sh` to validate it or explicitly upload it; neither command submits for review. See the [store distribution guide](docs/appstore.md) (in Chinese) for certificates, optional profiles, and authentication. The following workflow is for direct distribution.
+For the Mac App Store, run `APP_VERSION=1.0.0 ./scripts/build-appstore.sh` to create a signed Universal installer package. The build number increments automatically using local records; `BUILD_NUMBER` provides a manual override. Use `scripts/upload-appstore.sh` to validate it or explicitly upload it; neither command submits for review. See the [store distribution guide](docs/appstore.md) (in Chinese) for certificates, optional profiles, and authentication. The following workflow is for direct distribution.
 
 Use `scripts/release-app.sh` with an active Apple Developer Program membership, a Developer ID Application certificate and its private key in your local Keychain, and Xcode tools including `notarytool` and `stapler`. Signing and notarization require network access.
 

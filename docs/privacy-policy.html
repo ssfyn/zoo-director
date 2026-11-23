@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Privacy Policy for ZooDirector, a native ZooKeeper GUI client for macOS.">
+  <title>ZooDirector Privacy Policy</title>
+  <style>
+    body { max-width: 760px; margin: 48px auto; padding: 0 24px; font: 17px/1.7 system-ui, sans-serif; color: #202124; background: #fff; }
+    h1, h2 { line-height: 1.25; }
+    h2 { margin-top: 32px; font-size: 1.3em; }
+    a { color: #145cc5; }
+    footer { margin-top: 40px; border-top: 1px solid #ddd; padding-top: 16px; }
+    @media (prefers-color-scheme: dark) { body { color: #e8eaed; background: #17191c; } a { color: #8ab4f8; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>ZooDirector Privacy Policy</h1>
+    <p>Effective date: November 23, 2026</p>
+    <p>This policy explains how ZooDirector, a native ZooKeeper graphical client for macOS developed by Yanan Fan, handles information when you use the app.</p>
+
+    <h2>1. No developer-operated data collection</h2>
+    <p>ZooDirector does not require a ZooDirector account and does not send your connection settings, credentials, node data, or usage activity to the developer. The app does not include advertising, analytics SDKs, or tracking technologies. We do not sell your personal information.</p>
+
+    <h2>2. Information stored on your Mac</h2>
+    <p>ZooDirector stores information needed to provide its features locally on your Mac. This includes connection names and server addresses, authentication usernames, SSH connection settings, bookmarks for private key files you select, favorite node paths, and app preferences. Saved authentication passwords are stored in macOS Keychain rather than in connection settings.</p>
+    <p>The app reads and displays ZooKeeper node data and metadata when you connect to a server. Editing, creating, or deleting nodes sends the corresponding operations to that server.</p>
+
+    <h2>3. Connections to servers you choose</h2>
+    <p>ZooDirector connects to ZooKeeper and, when enabled, SSH servers that you configure. These servers receive information necessary for the connection, authentication, and requested operations, which may include your IP address, authentication information, node paths, and node content. The owners of those servers control their own logging, retention, and privacy practices.</p>
+    <p>ZooKeeper digest authentication does not encrypt network traffic. You can configure an SSH tunnel to protect traffic between your Mac and the SSH server. Protection for any onward connection from the SSH server depends on your server and network configuration.</p>
+
+    <h2>4. SSH private keys and passphrases</h2>
+    <p>Access to an SSH private key is granted through the macOS file picker. ZooDirector saves a read-only file access bookmark and creates a temporary local copy of the selected key for the system SSH process. The app attempts to remove that copy after authentication and during connection cleanup. Private keys are not uploaded to the developer or sent as key files to remote servers.</p>
+    <p>If your key requires a passphrase, the app requests it when connecting. ZooDirector does not persist that passphrase. SSH host trust records are stored locally by the app; you can remove a server's trust record through its connection settings.</p>
+
+    <h2>5. Your choices and data retention</h2>
+    <p>You control which servers to connect to and which private key files to authorize. You can edit or delete saved connections and remove favorites within the app. Deleting a connection removes its saved configuration and attempts to remove its associated saved password from Keychain. If Keychain access prevents removal, you can manage the remaining item in macOS Keychain Access.</p>
+    <p>Other local preferences and SSH trust records may remain until you remove them or the app's local data. Uninstalling the app may not remove every preference or Keychain item. Deleting local data does not delete node data or logs stored on remote servers; those are controlled separately by you or the server administrator.</p>
+
+    <h2>6. Apple services and this website</h2>
+    <p>App Store downloads, purchases where applicable, and any diagnostics you choose to share through Apple are handled under Apple's policies and your Apple settings. This policy does not replace Apple's privacy policy.</p>
+    <p>This privacy policy website is hosted on GitHub Pages. Visiting it may cause GitHub to process technical information such as your IP address under the <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub Privacy Statement</a>. This page does not include analytics scripts or advertising.</p>
+
+    <h2>7. Information you send for support</h2>
+    <p>If you contact us or submit a GitHub issue, we receive the information you choose to provide and use it to respond or investigate the issue. GitHub issues are public. Do not include passwords, private keys, sensitive node data, or confidential server addresses in public reports.</p>
+
+    <h2>8. Changes to this policy</h2>
+    <p>We may update this policy as the app changes. The current version will be available at this URL, with an updated effective date.</p>
+
+    <h2>9. Contact</h2>
+    <p>For privacy questions or requests, contact Yanan Fan through the <a href="https://github.com/ssfyn/zoo-director/issues">ZooDirector GitHub issue tracker</a>. Please describe your request without including secrets or sensitive personal information.</p>
+  </main>
+  <footer>ZooDirector · Privacy Policy</footer>
+</body>
+</html>

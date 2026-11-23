@@ -108,6 +108,8 @@ cat > "$app_dir/Contents/Info.plist" <<'PLIST'
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
+<!-- 加密能力使用 macOS 系统实现，不包含非豁免加密。 -->
+<key>ITSAppUsesNonExemptEncryption</key><false/>
 <key>NSLocalNetworkUsageDescription</key><string>Connect to ZooKeeper and SSH servers on your local network.</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>

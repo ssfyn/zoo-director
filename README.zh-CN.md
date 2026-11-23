@@ -37,7 +37,7 @@ open ".build/ZooDirector.app"
 
 ## 签名、公证与分发
 
-Mac App Store 打包使用 `APP_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-appstore.sh`，生成 Universal 商店安装包；随后使用 `scripts/upload-appstore.sh` 校验或显式上传，不自动提交审核。证书、可选描述文件和认证配置见 [商店发布指南](docs/appstore.md)。以下流程用于自行分发。
+Mac App Store 打包使用 `APP_VERSION=1.0.0 ./scripts/build-appstore.sh`，生成 Universal 商店安装包，构建号根据本机记录自动递增，也可通过 `BUILD_NUMBER` 手动覆盖；随后使用 `scripts/upload-appstore.sh` 校验或显式上传，不自动提交审核。证书、可选描述文件和认证配置见 [商店发布指南](docs/appstore.md)。以下流程用于自行分发。
 
 正式发布使用 `scripts/release-app.sh`，需要已生效的 Apple Developer Program 会员、本机钥匙串中的 Developer ID Application 证书及对应私钥，以及包含 `notarytool`、`stapler` 的 Xcode 工具。签名和公证需要网络。
 

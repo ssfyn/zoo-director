@@ -12,12 +12,13 @@ fi
 # 显示商店打包参数，不读取钥匙串或执行上传。
 show_help() {
     cat <<'HELP'
-用法：APP_VERSION=1.0.0 BUILD_NUMBER=1 ./scripts/build-appstore.sh
+用法：APP_VERSION=1.0.0 ./scripts/build-appstore.sh
 
 默认构建 Universal 应用，输出 dist/ZooDirector-版本号-构建号-appstore.pkg。
 只生成安装包，不上传、不提交审核、不执行 Developer ID 公证。
 
 可选环境变量：
+  BUILD_NUMBER                  手动指定构建号；省略时按本机记录自动递增。
   APPSTORE_SIGNING_IDENTITY      商店应用证书完整名称或 SHA-1。
   APPSTORE_INSTALLER_IDENTITY    商店安装包证书完整名称或 SHA-1。
   APPSTORE_TEAM_ID               要求使用的团队标识。
@@ -25,6 +26,8 @@ show_help() {
 
 未指定签名身份时只允许唯一的商店证书候选；两个证书必须属于同一团队。
 目前无受限权限时描述文件可省略；使用 TestFlight 时必须配置描述文件。
+自动号码保存在 dist/.appstore-build-number，失败也不回收号码。
+换电脑或清理全部记录和产物后，需手动指定一个高于商店现有记录的号码。
 HELP
 }
 
@@ -56,6 +59,9 @@ python3 scripts/appstore-signing.py "$work_dir"
 application_identity="$(plutil -extract application raw -o - "$work_dir/signing.json")"
 installer_identity="$(plutil -extract installer raw -o - "$work_dir/signing.json")"
 profile="$(plutil -extract profile raw -o - "$work_dir/signing.json")"
+# 在实际编译前预留号码，整个通用构建及其辅助应用继承同一号码。
+export BUILD_NUMBER="$(python3 scripts/appstore-build-number.py)"
+printf '本次商店构建号：%s\n' "$BUILD_NUMBER"
 ./scripts/build-app.sh release universal
 app_dir="$work_dir/ZooDirector.app"
 ditto .build/apps/universal/ZooDirector.app "$app_dir"
