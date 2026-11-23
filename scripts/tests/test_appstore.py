@@ -93,10 +93,11 @@ class AppStoreTests(unittest.TestCase):
 set -eu
 if [[ "${0:t}" == xcrun && "$2" == --help ]]; then print -- --upload-package; exit 0; fi
 print -r -- "${0:t} $*" >> "$CALLS"
+if [[ "${0:t}" == swift ]]; then [[ "$ZOODIRECTOR_APPSTORE_PASSWORD" == fixture-only ]]; fi
 if [[ "$FAIL_VALIDATION" == 1 && "${2:-}" == --validate-app ]]; then exit 1; fi
 ''')
             stub.chmod(0o755)
-            for name in ["xcrun", "pkgutil", "open"]:
+            for name in ["xcrun", "pkgutil", "open", "swift"]:
                 (directory / name).symlink_to(stub)
             package = directory / "test appstore.pkg"
             package.write_text("test-only")
@@ -104,7 +105,9 @@ if [[ "$FAIL_VALIDATION" == 1 && "${2:-}" == --validate-app ]]; then exit 1; fi
                        CALLS=str(calls), APPSTORE_APPLE_ID="fixture@example.invalid", APPSTORE_PASSWORD_ITEM="fixture-item",
                        FAIL_VALIDATION="1" if fail_validation else "0")
             env.pop("APPSTORE_PROVIDER_ID", None)
-            result = subprocess.run(["zsh", str(SCRIPT_DIRECTORY / "upload-appstore.sh"), *mode, str(package)],
+            arguments = mode if mode == ["--setup-credentials"] else [*mode, str(package)]
+            result = subprocess.run(["zsh", str(SCRIPT_DIRECTORY / "upload-appstore.sh"), *arguments],
+                                    input="fixture-only\n" if mode == ["--setup-credentials"] else None,
                                     env=env, capture_output=True, text=True)
             return result.returncode, calls.read_text()
 
@@ -113,6 +116,8 @@ if [[ "$FAIL_VALIDATION" == 1 && "${2:-}" == --validate-app ]]; then exit 1; fi
         code, calls = self.run_uploader([])
         self.assertEqual(code, 0)
         self.assertIn("--validate-app", calls)
+        self.assertIn("--validate-app --file", calls)
+        self.assertIn("--app-password @keychain:", calls)
         self.assertNotIn("--upload-package", calls)
         code, calls = self.run_uploader(["--upload"])
         self.assertEqual(code, 0)
@@ -120,6 +125,16 @@ if [[ "$FAIL_VALIDATION" == 1 && "${2:-}" == --validate-app ]]; then exit 1; fi
         self.assertIn("@keychain:fixture-item", calls)
         code, calls = self.run_uploader(["--upload"], fail_validation=True)
         self.assertNotEqual(code, 0)
+        self.assertNotIn("--upload-package", calls)
+
+    def test_setup_uses_system_keychain_without_exposing_password(self):
+        """通过系统钥匙串辅助程序保存，密码只通过进程环境传递，不进入参数。"""
+        code, calls = self.run_uploader(["--setup-credentials"])
+        self.assertEqual(code, 0)
+        self.assertIn("scripts/appstore-keychain.swift --store fixture-item fixture@example.invalid", calls)
+        self.assertNotIn("--store-password-in-keychain-item", calls)
+        self.assertNotIn("fixture-only", calls)
+        self.assertNotIn("--validate-app", calls)
         self.assertNotIn("--upload-package", calls)
 
     def test_transporter_does_not_invoke_command_line_upload(self):

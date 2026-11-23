@@ -36,6 +36,15 @@ dist/ZooDirector-1.0.0-1-appstore.pkg
 
 商店版本必须是三段数字，不能含 `beta` 等后缀。上传新构建时递增 `BUILD_NUMBER`，同时核对 App Store Connect 中的版本。构建渠道由此脚本设为 `appstore`；不要在 `.env` 中固定其他 `DISTRIBUTION_CHANNEL`。失败时保留 `dist/.appstore.*` 工作目录，不替换已有正式包。
 
+如果苹果返回 `ENTITY_ERROR.ATTRIBUTE.INVALID.DUPLICATE`，并指出 `previousBundleVersion: 1`，说明构建号 `1` 已被使用。保持面向用户的版本号不变，提高构建号后重新构建并签名，例如：
+
+```sh
+APP_VERSION=1.0.0 BUILD_NUMBER=2 ./scripts/build-appstore.sh
+./scripts/upload-appstore.sh --upload dist/ZooDirector-1.0.0-2-appstore.pkg
+```
+
+构建号存储在包内 `CFBundleVersion`，主程序和辅助应用保持一致；只修改 `.pkg` 文件名不会改变它。此类重复构建号错误表明请求已经通过认证，不需要因此重新配置密码。
+
 ## 描述文件与 TestFlight
 
 苹果说明，原生 macOS 应用没有受限权限时，即使通过 App Store 分发也可不带 provisioning profile；TestFlight 则始终需要描述文件。目前的沙箱及网络、文件授权权限属于前一种情况。[官方说明](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles)
@@ -58,13 +67,17 @@ APPSTORE_PROVISIONING_PROFILE="/绝对路径/ZooDirector.provisionprofile"
 ./scripts/upload-appstore.sh --transporter dist/ZooDirector-1.0.0-1-appstore.pkg
 ```
 
-使用命令行：先运行一次以下命令，按工具提示输入 App 专用密码，不将密码直接放入命令行：
+使用命令行：先运行一次以下命令，在脚本的隐藏输入提示中填写 App 专用密码，不将密码直接放入命令行：
 
 ```sh
-xcrun altool --store-password-in-keychain-item zoodirector-appstore --username 你的苹果账号邮箱
+./scripts/upload-appstore.sh --setup-credentials
 ```
 
-`notarytool` 保存的公证凭据不能直接作为 `altool` 的钥匙串条目；两者需要分别配置。脚本只引用条目名称，不读取或打印密码。然后执行：
+脚本从 `.env` 读取 `APPSTORE_APPLE_ID`，密码仅在本次进程环境中短暂传给 `appstore-keychain.swift`，由系统钥匙串 API 保存实际值，并同时设置条目标签、服务名称和账号，结束时清除环境变量。新条目只信任当前 Xcode 的 altool 入口及实际上传程序，更新已有条目时保留原访问控制；遇到重复标签或其他服务名会停止，避免覆盖未知凭据。
+
+本机新版 altool 的保存命令曾出现两个兼容问题：需要显式的 `--item` 和 `--app-password`，且会把 `@env:...` 原样保存，还会缺少读取所需的服务名称。因此配置入口不再调用该保存命令。已使用纯测试值实际验证系统 API 保存的是输入值而非引用，未读取真实上传密码；之前通过旧配置入口保存过的凭据需要重新配置一次。
+
+`notarytool` 保存的公证凭据不能直接作为 `altool` 的钥匙串条目；两者需要分别配置。后续校验和上传只引用条目名称，不读取或打印密码。然后执行：
 
 ```sh
 # 默认仅通过苹果服务校验。
