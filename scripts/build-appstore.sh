@@ -41,7 +41,7 @@ if (( $# != 0 )); then
 fi
 export DISTRIBUTION_CHANNEL=appstore
 python3 scripts/build-metadata.py --validate-only
-for tool in python3 security codesign productbuild pkgutil ditto lipo plutil; do
+for tool in python3 security codesign productbuild pkgutil ditto lipo plutil xattr; do
     command -v "$tool" >/dev/null
 done
 mkdir -p dist
@@ -68,6 +68,8 @@ ditto .build/apps/universal/ZooDirector.app "$app_dir"
 if [[ -n "$profile" ]]; then
     cp "$profile" "$app_dir/Contents/embedded.provisionprofile"
 fi
+# 下载的描述文件可能带隔离属性；仅清理打包副本，并在正式签名前完成。
+xattr -cr "$app_dir"
 # 辅助应用仅继承沙箱，不向它添加需要单独描述文件的应用标识权限。
 helper_dir="$app_dir/Contents/Helpers/ZooDirectorSSHAskpass.app"
 codesign --force --options runtime --timestamp --sign "$application_identity" \
@@ -85,6 +87,13 @@ fi
 productbuild --component "$app_dir" /Applications --sign "$installer_identity" \
     "$work_dir/distribution.pkg"
 pkgutil --check-signature "$work_dir/distribution.pkg"
+# 检查实际安装包的完整载荷，避免属性在打包过程中重新进入应用。
+pkgutil --expand-full "$work_dir/distribution.pkg" "$work_dir/expanded-package"
+package_attributes="$(xattr -r "$work_dir/expanded-package")"
+if [[ "$package_attributes" == *com.apple.quarantine* ]]; then
+    printf '安装包仍含隔离属性，已停止输出，请检查诊断目录。\n' >&2
+    exit 1
+fi
 output_file="$PWD/dist/ZooDirector-${version}-${build}-appstore.pkg"
 mv -f "$work_dir/distribution.pkg" "$output_file"
 printf '商店上传包：%s\n构建记录：%s\n' "$output_file" "$work_dir"
